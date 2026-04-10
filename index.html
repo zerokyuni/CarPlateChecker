@@ -74,7 +74,7 @@
             flex: 1; /* Take up half the space */
             background-color: #1f2937;
             border-top: 1px solid #374151;
-            padding: 1rem;
+            padding: 0.75rem; /* Reduced padding for compact view */
             overflow-y: auto;
             display: flex;
             flex-direction: column;
@@ -89,11 +89,11 @@
 <body class="app-container">
 
     <!-- Header -->
-    <header class="bg-gray-900 border-b border-gray-800 p-4 flex justify-between items-center shadow-md z-30 shrink-0">
-        <h1 class="text-xl font-bold text-white flex items-center gap-2">
+    <header class="bg-gray-900 border-b border-gray-800 p-3 sm:p-4 flex justify-between items-center shadow-md z-30 shrink-0">
+        <h1 class="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
             <i class="fa-solid fa-car-side text-emerald-500"></i> 번호판 스캐너
         </h1>
-        <button id="dbManageBtn" class="text-gray-400 hover:text-white transition-colors p-2 bg-gray-800 rounded-lg">
+        <button id="dbManageBtn" class="text-gray-400 hover:text-white transition-colors p-1.5 sm:p-2 bg-gray-800 rounded-lg text-sm sm:text-base">
             <i class="fa-solid fa-database"></i> DB 관리
         </button>
     </header>
@@ -108,70 +108,81 @@
                 <video id="videoElement" autoplay playsinline muted></video>
                 <div class="scan-guide" id="scanGuide">
                     <div class="scan-line" id="scanLine" style="display: none;"></div>
-                    <div class="absolute -top-8 left-0 w-full text-center text-sm text-gray-300 font-medium tracking-wide">
+                    <div class="absolute -top-7 left-0 w-full text-center text-[11px] sm:text-sm text-gray-300 font-medium tracking-wide">
                         박스 안에 번호판을 맞춰주세요
                     </div>
                 </div>
 
                 <!-- OCR Loading Indicator -->
                 <div id="ocrLoading" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-50">
-                    <i class="fa-solid fa-circle-notch fa-spin text-4xl text-emerald-500 mb-4"></i>
-                    <p class="text-white font-medium">OCR 엔진을 불러오는 중입니다...</p>
-                    <p class="text-gray-400 text-sm mt-2">초기 1회만 약 10~20초 소요됩니다.</p>
+                    <i class="fa-solid fa-circle-notch fa-spin text-3xl sm:text-4xl text-emerald-500 mb-3 sm:mb-4"></i>
+                    <p class="text-white font-medium text-sm sm:text-base">OCR 엔진을 불러오는 중입니다...</p>
+                    <p class="text-gray-400 text-xs sm:text-sm mt-2">초기 1회만 약 10~20초 소요됩니다.</p>
                 </div>
             </div>
 
-            <!-- Bottom Half: Fixed Result Status -->
+            <!-- Bottom Half: Fixed Result Status (Compact Version) -->
             <div class="result-section relative">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                <div class="flex justify-between items-center mb-2 shrink-0">
+                    <h2 class="text-base font-bold text-white flex items-center gap-2">
                         <i class="fa-solid fa-clipboard-list text-emerald-400"></i> 인식 상태
                     </h2>
-                    <span id="scanStatusIndicator" class="text-xs px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center gap-1">
-                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 스캔중
+                    <span id="scanStatusIndicator" class="text-[10px] sm:text-xs px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> 스캔중
                     </span>
                 </div>
 
                 <!-- Placeholder when nothing is scanned -->
                 <div id="idleState" class="flex-1 flex flex-col items-center justify-center text-gray-500 h-full">
-                    <i class="fa-solid fa-camera text-4xl mb-2 opacity-50"></i>
-                    <p>카메라로 번호판을 비춰주세요</p>
+                    <i class="fa-solid fa-camera text-3xl mb-2 opacity-50"></i>
+                    <p class="text-sm">카메라로 번호판을 비춰주세요</p>
                 </div>
 
                 <!-- Result Data Container -->
-                <div id="resultData" class="hidden flex-col gap-3">
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="bg-gray-800 p-3 rounded-lg border border-gray-700">
-                            <div class="text-xs text-gray-400 mb-1">차량 번호</div>
-                            <div id="resultPlateNum" class="text-lg font-bold text-white font-mono break-all">-</div>
-                        </div>
-                        <div class="bg-gray-800 p-3 rounded-lg border border-gray-700">
-                            <div class="text-xs text-gray-400 mb-1">차량 주인</div>
-                            <div id="resultOwnerName" class="text-lg font-bold text-white">-</div>
-                        </div>
-                    </div>
+                <div id="resultData" class="hidden flex-col gap-2 h-full justify-start pb-1">
                     
-                    <div class="bg-gray-800 p-3 rounded-lg border border-gray-700">
-                        <div class="text-xs text-gray-400 mb-1">인식 일시</div>
-                        <div id="resultDateTime" class="text-sm font-medium text-gray-300">-</div>
+                    <!-- Captured Plate Image -->
+                    <div id="capturedPlateImgContainer" class="w-full h-16 sm:h-20 bg-black rounded-lg border border-gray-700 overflow-hidden relative shrink-0">
+                        <img id="capturedPlateImg" src="" class="w-full h-full object-cover" alt="인식된 번호판 사진">
+                        <div class="absolute top-1 left-1 bg-black/60 text-[9px] text-gray-300 px-1.5 py-0.5 rounded">캡처 이미지</div>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-3">
-                        <div id="bu5StatusBox" class="p-3 rounded-lg border border-gray-700 text-center flex flex-col justify-center">
-                            <div class="text-xs text-gray-400 mb-1">5부제</div>
-                            <div id="bu5Status" class="text-sm font-bold">-</div>
+                    <!-- Plate & Owner -->
+                    <div class="grid grid-cols-2 gap-2 shrink-0">
+                        <div class="bg-gray-800 p-2 rounded-lg border border-gray-700">
+                            <div class="text-[10px] text-gray-400 mb-0.5">차량 번호</div>
+                            <div id="resultPlateNum" class="text-base font-bold text-white font-mono truncate">-</div>
                         </div>
-                        <div id="bu2StatusBox" class="p-3 rounded-lg border border-gray-700 text-center flex flex-col justify-center">
-                            <div class="text-xs text-gray-400 mb-1">2부제</div>
-                            <div id="bu2Status" class="text-sm font-bold">-</div>
+                        <div class="bg-gray-800 p-2 rounded-lg border border-gray-700">
+                            <div class="text-[10px] text-gray-400 mb-0.5">차량 주인</div>
+                            <div id="resultOwnerName" class="text-base font-bold text-white truncate">-</div>
                         </div>
                     </div>
                     
-                    <div class="flex gap-2 mt-2 w-full hidden" id="actionButtons">
-                        <button id="resumeScanBtn" class="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-medium transition-colors">
+                    <!-- DateTime -->
+                    <div class="bg-gray-800 p-2 rounded-lg border border-gray-700 shrink-0">
+                        <div class="text-[10px] text-gray-400 mb-0.5">인식 일시</div>
+                        <div id="resultDateTime" class="text-xs font-medium text-gray-300">-</div>
+                    </div>
+
+                    <!-- Restrictions -->
+                    <div class="grid grid-cols-2 gap-2 shrink-0">
+                        <div id="bu5StatusBox" class="p-2 rounded-lg border border-gray-700 text-center flex flex-col justify-center">
+                            <div class="text-[10px] text-gray-400 mb-0.5">5부제</div>
+                            <div id="bu5Status" class="text-xs font-bold">-</div>
+                        </div>
+                        <div id="bu2StatusBox" class="p-2 rounded-lg border border-gray-700 text-center flex flex-col justify-center">
+                            <div class="text-[10px] text-gray-400 mb-0.5">2부제</div>
+                            <div id="bu2Status" class="text-xs font-bold">-</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Buttons -->
+                    <div class="flex gap-2 mt-auto pt-1 w-full hidden shrink-0" id="actionButtons">
+                        <button id="resumeScanBtn" class="flex-1 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white text-sm font-medium transition-colors">
                             <i class="fa-solid fa-rotate-right mr-1"></i>다시 스캔
                         </button>
-                        <button id="saveScreenBtn" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white font-medium transition-colors">
+                        <button id="saveScreenBtn" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white text-sm font-medium transition-colors">
                             <i class="fa-solid fa-download mr-1"></i>결과 저장
                         </button>
                     </div>
@@ -181,44 +192,44 @@
 
         <!-- Manual Search View (Hidden by default) -->
         <div id="searchView" class="hidden absolute inset-0 bg-gray-900 p-6 flex flex-col items-center justify-center z-20 overflow-y-auto">
-            <i class="fa-solid fa-keyboard text-6xl text-gray-700 mb-6 mt-10"></i>
-            <h2 class="text-2xl font-bold mb-2">수동 검색</h2>
-            <p class="text-gray-400 text-center mb-8">카메라 인식이 어려울 때 직접 번호를 입력하세요.</p>
+            <i class="fa-solid fa-keyboard text-5xl text-gray-700 mb-4 mt-6"></i>
+            <h2 class="text-xl font-bold mb-2">수동 검색</h2>
+            <p class="text-gray-400 text-sm text-center mb-6">카메라 인식이 어려울 때 직접 번호를 입력하세요.</p>
             
             <div class="w-full max-w-md relative">
-                <input type="text" id="manualPlateInput" placeholder="예: 12가3456" class="w-full bg-gray-800 border border-gray-700 rounded-xl py-4 pl-4 pr-12 text-xl font-mono text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all">
-                <button id="manualSearchBtn" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-emerald-600 hover:bg-emerald-500 text-white w-10 h-10 rounded-lg flex items-center justify-center transition-colors">
+                <input type="text" id="manualPlateInput" placeholder="예: 12가3456" class="w-full bg-gray-800 border border-gray-700 rounded-xl py-3 pl-4 pr-12 text-lg font-mono text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all">
+                <button id="manualSearchBtn" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-emerald-600 hover:bg-emerald-500 text-white w-9 h-9 rounded-lg flex items-center justify-center transition-colors">
                     <i class="fa-solid fa-search"></i>
                 </button>
             </div>
             
             <!-- Manual Search Result -->
-            <div id="manualSearchResult" class="w-full max-w-md mt-6 hidden">
-                <div class="bg-gray-800 border border-gray-700 p-5 rounded-xl flex flex-col gap-3">
-                    <div class="grid grid-cols-2 gap-3">
+            <div id="manualSearchResult" class="w-full max-w-md mt-4 hidden">
+                <div class="bg-gray-800 border border-gray-700 p-4 rounded-xl flex flex-col gap-2">
+                    <div class="grid grid-cols-2 gap-2">
                         <div>
-                            <div class="text-xs text-gray-400 mb-1">차량 번호</div>
-                            <div id="manualResultPlateNum" class="text-lg font-bold text-white font-mono">-</div>
+                            <div class="text-[10px] text-gray-400 mb-0.5">차량 번호</div>
+                            <div id="manualResultPlateNum" class="text-base font-bold text-white font-mono truncate">-</div>
                         </div>
                         <div>
-                            <div class="text-xs text-gray-400 mb-1">차량 주인</div>
-                            <div id="manualResultOwnerName" class="text-lg font-bold text-white">-</div>
+                            <div class="text-[10px] text-gray-400 mb-0.5">차량 주인</div>
+                            <div id="manualResultOwnerName" class="text-base font-bold text-white truncate">-</div>
                         </div>
                     </div>
                     
-                    <div class="grid grid-cols-2 gap-3 mt-2">
-                        <div id="manualBu5StatusBox" class="p-3 rounded-lg border border-gray-700 text-center">
-                            <div class="text-xs text-gray-400 mb-1">5부제</div>
-                            <div id="manualBu5Status" class="text-sm font-bold">-</div>
+                    <div class="grid grid-cols-2 gap-2 mt-1">
+                        <div id="manualBu5StatusBox" class="p-2 rounded-lg border border-gray-700 text-center">
+                            <div class="text-[10px] text-gray-400 mb-0.5">5부제</div>
+                            <div id="manualBu5Status" class="text-xs font-bold">-</div>
                         </div>
-                        <div id="manualBu2StatusBox" class="p-3 rounded-lg border border-gray-700 text-center">
-                            <div class="text-xs text-gray-400 mb-1">2부제</div>
-                            <div id="manualBu2Status" class="text-sm font-bold">-</div>
+                        <div id="manualBu2StatusBox" class="p-2 rounded-lg border border-gray-700 text-center">
+                            <div class="text-[10px] text-gray-400 mb-0.5">2부제</div>
+                            <div id="manualBu2Status" class="text-xs font-bold">-</div>
                         </div>
                     </div>
                     
-                    <button id="manualSaveScreenBtn" class="mt-4 w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white font-medium transition-colors">
-                        <i class="fa-solid fa-download mr-2"></i>이 결과 저장하기
+                    <button id="manualSaveScreenBtn" class="mt-3 w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white text-sm font-medium transition-colors">
+                        <i class="fa-solid fa-download mr-1"></i>이 결과 저장하기
                     </button>
                 </div>
             </div>
@@ -227,13 +238,13 @@
 
     <!-- Bottom Navigation -->
     <nav class="bg-gray-900 border-t border-gray-800 flex shrink-0 pb-safe z-30">
-        <button id="navCamera" class="flex-1 py-3 flex flex-col items-center gap-1 text-emerald-500 transition-colors">
-            <i class="fa-solid fa-camera text-xl"></i>
-            <span class="text-xs font-medium">카메라 스캔</span>
+        <button id="navCamera" class="flex-1 py-2 sm:py-3 flex flex-col items-center gap-1 text-emerald-500 transition-colors">
+            <i class="fa-solid fa-camera text-lg sm:text-xl"></i>
+            <span class="text-[10px] sm:text-xs font-medium">카메라 스캔</span>
         </button>
-        <button id="navSearch" class="flex-1 py-3 flex flex-col items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors">
-            <i class="fa-solid fa-keyboard text-xl"></i>
-            <span class="text-xs font-medium">직접 입력</span>
+        <button id="navSearch" class="flex-1 py-2 sm:py-3 flex flex-col items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors">
+            <i class="fa-solid fa-keyboard text-lg sm:text-xl"></i>
+            <span class="text-[10px] sm:text-xs font-medium">직접 입력</span>
         </button>
     </nav>
 
@@ -241,48 +252,48 @@
     <div id="dbModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex flex-col items-center justify-end sm:justify-center p-4 pb-0 sm:pb-4 transition-opacity duration-300 opacity-0">
         <div class="bg-gray-900 border border-gray-700 w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col max-h-[85vh] transform transition-transform duration-300 translate-y-full sm:translate-y-0" id="dbModalContent">
             
-            <div class="p-5 border-b border-gray-800 flex justify-between items-center shrink-0">
-                <h2 class="text-xl font-bold"><i class="fa-solid fa-database text-emerald-500 mr-2"></i> 내 차량 DB 관리</h2>
-                <button id="closeDbModal" class="text-gray-400 hover:text-white p-2"><i class="fa-solid fa-times text-xl"></i></button>
+            <div class="p-4 border-b border-gray-800 flex justify-between items-center shrink-0">
+                <h2 class="text-lg font-bold"><i class="fa-solid fa-database text-emerald-500 mr-2"></i> 내 차량 DB 관리</h2>
+                <button id="closeDbModal" class="text-gray-400 hover:text-white p-2"><i class="fa-solid fa-times text-lg"></i></button>
             </div>
             
-            <div class="p-5 overflow-y-auto flex-1">
+            <div class="p-4 overflow-y-auto flex-1">
                 <!-- Add Form -->
-                <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 mb-6">
+                <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 mb-5">
                     <h3 class="text-sm font-bold text-gray-300 mb-3">새 차량 등록</h3>
                     <div class="flex flex-col gap-3">
-                        <input type="text" id="newPlateNum" placeholder="차량 번호 (띄어쓰기 없이)" class="bg-gray-900 border border-gray-700 rounded-lg p-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500">
-                        <input type="text" id="newOwnerName" placeholder="주인 이름" class="bg-gray-900 border border-gray-700 rounded-lg p-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500">
-                        <button id="addPlateBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+                        <input type="text" id="newPlateNum" placeholder="차량 번호 (띄어쓰기 없이)" class="bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500">
+                        <input type="text" id="newOwnerName" placeholder="주인 이름" class="bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500">
+                        <button id="addPlateBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
                             <i class="fa-solid fa-plus"></i> 등록하기
                         </button>
                     </div>
                 </div>
 
                 <!-- CSV Import/Export -->
-                <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 mb-6">
+                <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 mb-5">
                     <h3 class="text-sm font-bold text-gray-300 mb-3">데이터 백업 및 복구 (CSV)</h3>
                     <div class="flex gap-2">
                         <input type="file" id="csvFileInput" accept=".csv" class="hidden">
-                        <button id="importCsvBtn" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded-lg transition-colors text-sm">
+                        <button id="importCsvBtn" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded-lg transition-colors text-xs">
                             <i class="fa-solid fa-file-import mr-1"></i> CSV 불러오기
                         </button>
-                        <button id="exportCsvBtn" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded-lg transition-colors text-sm">
+                        <button id="exportCsvBtn" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded-lg transition-colors text-xs">
                             <i class="fa-solid fa-file-export mr-1"></i> CSV 내보내기
                         </button>
                     </div>
-                    <p class="text-xs text-gray-400 mt-2 text-center break-keep">데이터는 서버에 전송되지 않으며 기기 내부에만 저장됩니다.</p>
+                    <p class="text-[10px] text-gray-400 mt-2 text-center break-keep">데이터는 서버에 전송되지 않으며 기기 내부에만 저장됩니다.</p>
                 </div>
 
                 <!-- List -->
                 <div>
                     <h3 class="text-sm font-bold text-gray-300 mb-3 flex justify-between items-center">
                         등록된 차량 목록
-                        <span id="totalCarsCount" class="text-xs bg-gray-800 px-2 py-1 rounded text-gray-400">0대</span>
+                        <span id="totalCarsCount" class="text-[10px] bg-gray-800 px-2 py-1 rounded text-gray-400">0대</span>
                     </h3>
                     <div id="dbList" class="space-y-2">
                         <!-- Items populated via JS -->
-                        <div class="text-center text-gray-500 py-8">데이터를 불러오는 중...</div>
+                        <div class="text-center text-sm text-gray-500 py-6">데이터를 불러오는 중...</div>
                     </div>
                 </div>
             </div>
@@ -290,9 +301,9 @@
     </div>
 
     <!-- Custom Alert/Toast -->
-    <div id="toast" class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-gray-800 border border-gray-600 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-3 transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px]">
-        <i id="toastIcon" class="fa-solid fa-info-circle text-emerald-500"></i>
-        <span id="toastMsg" class="font-medium text-sm">메시지</span>
+    <div id="toast" class="fixed top-16 left-1/2 transform -translate-x-1/2 bg-gray-800 border border-gray-600 text-white px-5 py-2.5 rounded-full shadow-2xl z-50 flex items-center gap-2 transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px]">
+        <i id="toastIcon" class="fa-solid fa-info-circle text-emerald-500 text-sm"></i>
+        <span id="toastMsg" class="font-medium text-xs sm:text-sm whitespace-nowrap">메시지</span>
     </div>
 
     <script>
@@ -340,6 +351,8 @@
         const resumeScanBtn = document.getElementById('resumeScanBtn');
         const saveScreenBtn = document.getElementById('saveScreenBtn');
         const scanStatusIndicator = document.getElementById('scanStatusIndicator');
+        const capturedPlateImg = document.getElementById('capturedPlateImg');
+        const capturedPlateImgContainer = document.getElementById('capturedPlateImgContainer');
         
         // Navigation
         const navCamera = document.getElementById('navCamera');
@@ -364,6 +377,7 @@
         let isScanning = false;
         let scanInterval = null;
         let lastRecognizedPlate = "";
+        let currentFrameDataUrl = ""; // 실시간 캡처 이미지 데이터 보관
 
         // --- App Initialization ---
         async function initApp() {
@@ -381,7 +395,7 @@
                 startScanningLoop();
             } catch (error) {
                 console.error("OCR Init Error:", error);
-                ocrLoading.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-4xl text-red-500 mb-4"></i><p class="text-white">OCR 엔진을 불러오지 못했습니다.</p>`;
+                ocrLoading.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-3xl sm:text-4xl text-red-500 mb-3 sm:mb-4"></i><p class="text-white text-sm">OCR 엔진을 불러오지 못했습니다.</p>`;
                 scanStatusIndicator.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500"></i> 오류`;
             }
         }
@@ -417,8 +431,8 @@
             if (isScanning || !ocrWorker) return;
             isScanning = true;
             
-            scanStatusIndicator.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 스캔중`;
-            scanStatusIndicator.className = "text-xs px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center gap-1";
+            scanStatusIndicator.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> 스캔중`;
+            scanStatusIndicator.className = "text-[10px] sm:text-xs px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center gap-1";
             
             scanInterval = setInterval(async () => {
                 if (!isScanning) return;
@@ -432,6 +446,7 @@
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
+            // 번호판 가이드 박스 영역과 일치하게 자르기 위한 크기
             const cropWidth = 400;
             const cropHeight = 150;
             canvas.width = cropWidth;
@@ -440,7 +455,11 @@
             const sx = (videoElement.videoWidth - cropWidth) / 2;
             const sy = (videoElement.videoHeight - cropHeight) / 2;
 
+            // 카메라 영상 중앙 자르기
             ctx.drawImage(videoElement, sx, sy, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+            
+            // 현재 프레임을 이미지 데이터로 임시 저장 (인식 성공 시 화면에 띄우기 위함)
+            currentFrameDataUrl = canvas.toDataURL('image/jpeg', 0.8);
 
             try {
                 const { data: { text } } = await ocrWorker.recognize(canvas);
@@ -518,24 +537,24 @@
         function updateRestrictionUI(restrictions, bu5Box, bu5Text, bu2Box, bu2Text) {
             // 5부제 UI 업데이트
             if (restrictions.bu5.canDrive) {
-                bu5Box.className = "p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-center flex flex-col justify-center";
+                bu5Box.className = "p-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-center flex flex-col justify-center";
                 bu5Text.textContent = restrictions.bu5.reason;
-                bu5Text.className = "text-sm font-bold text-emerald-400";
+                bu5Text.className = "text-xs font-bold text-emerald-400";
             } else {
-                bu5Box.className = "p-3 rounded-lg border border-red-500/30 bg-red-500/10 text-center flex flex-col justify-center";
+                bu5Box.className = "p-2 rounded-lg border border-red-500/30 bg-red-500/10 text-center flex flex-col justify-center";
                 bu5Text.textContent = restrictions.bu5.reason;
-                bu5Text.className = "text-sm font-bold text-red-400";
+                bu5Text.className = "text-xs font-bold text-red-400";
             }
 
             // 2부제 UI 업데이트
             if (restrictions.bu2.canDrive) {
-                bu2Box.className = "p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-center flex flex-col justify-center";
+                bu2Box.className = "p-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-center flex flex-col justify-center";
                 bu2Text.textContent = restrictions.bu2.reason;
-                bu2Text.className = "text-sm font-bold text-emerald-400";
+                bu2Text.className = "text-xs font-bold text-emerald-400";
             } else {
-                bu2Box.className = "p-3 rounded-lg border border-red-500/30 bg-red-500/10 text-center flex flex-col justify-center";
+                bu2Box.className = "p-2 rounded-lg border border-red-500/30 bg-red-500/10 text-center flex flex-col justify-center";
                 bu2Text.textContent = restrictions.bu2.reason;
-                bu2Text.className = "text-sm font-bold text-red-400";
+                bu2Text.className = "text-xs font-bold text-red-400";
             }
         }
 
@@ -545,13 +564,18 @@
             if(scanInterval) clearInterval(scanInterval);
             scanLine.style.display = 'none';
             scanStatusIndicator.innerHTML = `<i class="fa-solid fa-pause"></i> 일시정지`;
-            scanStatusIndicator.className = "text-xs px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded-full flex items-center gap-1";
+            scanStatusIndicator.className = "text-[10px] sm:text-xs px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded-full flex items-center gap-1";
 
             // Update UI elements
             idleState.classList.add('hidden');
             resultData.classList.remove('hidden');
             resultData.classList.add('flex');
             actionButtons.classList.remove('hidden');
+
+            // 캡처된 차량 이미지 표시
+            if(currentFrameDataUrl) {
+                capturedPlateImg.src = currentFrameDataUrl;
+            }
 
             resultPlateNum.textContent = formatPlate(plateNum);
             
@@ -568,11 +592,11 @@
             
             if (ownerName) {
                 resultOwnerName.textContent = ownerName;
-                resultOwnerName.className = "text-lg font-bold text-emerald-400";
+                resultOwnerName.className = "text-base font-bold text-emerald-400 truncate";
                 showToast("차량을 찾았습니다!", "success");
             } else {
                 resultOwnerName.textContent = "미등록";
-                resultOwnerName.className = "text-lg font-bold text-gray-500";
+                resultOwnerName.className = "text-base font-bold text-gray-500";
             }
         }
 
@@ -635,10 +659,10 @@
 
             if (ownerName) {
                 document.getElementById('manualResultOwnerName').textContent = ownerName;
-                document.getElementById('manualResultOwnerName').className = "text-lg font-bold text-emerald-400";
+                document.getElementById('manualResultOwnerName').className = "text-base font-bold text-emerald-400 truncate";
             } else {
                 document.getElementById('manualResultOwnerName').textContent = "미등록";
-                document.getElementById('manualResultOwnerName').className = "text-lg font-bold text-gray-500";
+                document.getElementById('manualResultOwnerName').className = "text-base font-bold text-gray-500";
             }
 
             // Check Restrictions for manual input
@@ -668,7 +692,7 @@
                 
                 // 캡처되는 이미지의 여백과 배경색을 예쁘게 다듬기 위한 임시 스타일
                 const originalPadding = targetElement.style.padding;
-                targetElement.style.padding = '20px';
+                targetElement.style.padding = '16px'; // 모바일에 맞춘 캡처 여백
                 targetElement.style.backgroundColor = '#1f2937';
                 targetElement.style.borderRadius = '12px';
 
@@ -805,7 +829,7 @@
             totalCarsCount.textContent = `${plates.length}대`;
 
             if(plates.length === 0) {
-                dbList.innerHTML = '<div class="text-center text-gray-500 py-8">등록된 차량이 없습니다.</div>';
+                dbList.innerHTML = '<div class="text-center text-sm text-gray-500 py-6">등록된 차량이 없습니다.</div>';
                 return;
             }
 
@@ -815,11 +839,11 @@
                 item.className = "flex justify-between items-center bg-gray-800 p-3 rounded-lg border border-gray-700";
                 item.innerHTML = `
                     <div>
-                        <div class="font-mono font-bold text-emerald-400">${formatPlate(plateId)}</div>
-                        <div class="text-sm text-gray-300">${ownerName}</div>
+                        <div class="font-mono text-sm font-bold text-emerald-400">${formatPlate(plateId)}</div>
+                        <div class="text-[11px] sm:text-xs text-gray-300">${ownerName}</div>
                     </div>
                     <button class="text-red-400 hover:text-red-300 p-2 delete-btn" data-id="${plateId}">
-                        <i class="fa-solid fa-trash-can"></i>
+                        <i class="fa-solid fa-trash-can text-sm"></i>
                     </button>
                 `;
                 dbList.appendChild(item);
@@ -848,14 +872,14 @@
             text.textContent = msg;
             
             if (type === "error") {
-                icon.className = "fa-solid fa-circle-exclamation text-red-500";
-                toast.className = "fixed top-20 left-1/2 transform -translate-x-1/2 bg-red-900/90 border border-red-700 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-3 transition-all duration-300 opacity-100 translate-y-0";
+                icon.className = "fa-solid fa-circle-exclamation text-red-500 text-sm";
+                toast.className = "fixed top-16 left-1/2 transform -translate-x-1/2 bg-red-900/90 border border-red-700 text-white px-5 py-2.5 rounded-full shadow-2xl z-50 flex items-center gap-2 transition-all duration-300 opacity-100 translate-y-0";
             } else if (type === "success") {
-                icon.className = "fa-solid fa-check-circle text-emerald-500";
-                toast.className = "fixed top-20 left-1/2 transform -translate-x-1/2 bg-emerald-900/90 border border-emerald-700 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-3 transition-all duration-300 opacity-100 translate-y-0";
+                icon.className = "fa-solid fa-check-circle text-emerald-500 text-sm";
+                toast.className = "fixed top-16 left-1/2 transform -translate-x-1/2 bg-emerald-900/90 border border-emerald-700 text-white px-5 py-2.5 rounded-full shadow-2xl z-50 flex items-center gap-2 transition-all duration-300 opacity-100 translate-y-0";
             } else {
-                icon.className = "fa-solid fa-info-circle text-blue-400";
-                toast.className = "fixed top-20 left-1/2 transform -translate-x-1/2 bg-gray-800 border border-gray-600 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-3 transition-all duration-300 opacity-100 translate-y-0";
+                icon.className = "fa-solid fa-info-circle text-blue-400 text-sm";
+                toast.className = "fixed top-16 left-1/2 transform -translate-x-1/2 bg-gray-800 border border-gray-600 text-white px-5 py-2.5 rounded-full shadow-2xl z-50 flex items-center gap-2 transition-all duration-300 opacity-100 translate-y-0";
             }
 
             clearTimeout(toastTimeout);
