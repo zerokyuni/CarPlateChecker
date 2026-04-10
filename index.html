@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>스마트 차량 번호판 스캐너</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        body { background-color: #111827; color: white; overscroll-behavior-y: none; }
+        .camera-container {
+            position: relative;
+            width: 100%;
+            height: calc(100vh - 140px);
+            overflow: hidden;
+            background-color: #000;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .scan-guide {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            max-width: 350px;
+            height: 120px;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 12px;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+            z-index: 10;
+        }
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: #10B981;
+            box-shadow: 0 0 10px #10B981;
+            animation: scan 2s infinite linear;
+        }
+        @keyframes scan {
+            0% { top: 0; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+        .result-overlay {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 400px;
+            z-index: 20;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #4B5563; border-radius: 3px; }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+
+    <!-- Header -->
+    <header class="bg-gray-900 border-b border-gray-800 p-4 flex justify-between items-center shadow-md z-30">
+        <h1 class="text-xl font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-car-side text-emerald-500"></i> 번호판 스캐너
+        </h1>
+        <button id="dbManageBtn" class="text-gray-400 hover:text-white transition-colors p-2 bg-gray-800 rounded-lg">
+            <i class="fa-solid fa-database"></i> DB 관리
+        </button>
+    </header>
+
+    <!-- Main Content (Camera & Search) -->
+    <main class="flex-1 relative flex flex-col">
+        <!-- Camera View -->
+        <div id="cameraView" class="camera-container flex-1">
+            <video id="videoElement" autoplay playsinline muted></video>
+            <div class="scan-guide" id="scanGuide">
+                <div class="scan-line" id="scanLine" style="display: none;"></div>
+                <div class="absolute -top-8 left-0 w-full text-center text-sm text-gray-300 font-medium tracking-wide">
+                    박스 안에 번호판을 맞춰주세요
+                </div>
+            </div>
+
+            <!-- OCR Loading Indicator -->
+            <div id="ocrLoading" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-50">
+                <i class="fa-solid fa-circle-notch fa-spin text-4xl text-emerald-500 mb-4"></i>
+                <p class="text-white font-medium">OCR 엔진을 불러오는 중입니다...</p>
+                <p class="text-gray-400 text-sm mt-2">초기 1회만 약 10~20초 소요됩니다.</p>
+            </div>
+
+            <!-- Real-time Result -->
+            <div id="resultCard" class="result-overlay bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-2xl p-5 shadow-2xl transition-all duration-300 transform translate-y-full opacity-0">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="text-emerald-400 font-bold text-sm tracking-wider">인식 완료</div>
+                    <button id="closeResultBtn" class="text-gray-500 hover:text-white">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="bg-gray-800 p-3 rounded-xl border border-gray-700 flex-1">
+                        <div class="text-xs text-gray-400 mb-1">차량 번호</div>
+                        <div id="resultPlateNum" class="text-xl font-bold text-white font-mono">123가4567</div>
+                    </div>
+                </div>
+                <div class="mt-4 bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl">
+                    <div class="text-xs text-emerald-400 mb-1">차량 주인</div>
+                    <div id="resultOwnerName" class="text-2xl font-bold text-white">홍길동</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manual Search View (Hidden by default) -->
+        <div id="searchView" class="hidden flex-1 bg-gray-900 p-6 flex flex-col items-center justify-center">
+            <i class="fa-solid fa-keyboard text-6xl text-gray-700 mb-6"></i>
+            <h2 class="text-2xl font-bold mb-2">수동 검색</h2>
+            <p class="text-gray-400 text-center mb-8">카메라 인식이 어려울 때 직접 번호를 입력하세요.</p>
+            
+            <div class="w-full max-w-md relative">
+                <input type="text" id="manualPlateInput" placeholder="예: 12가3456" class="w-full bg-gray-800 border border-gray-700 rounded-xl py-4 pl-4 pr-12 text-xl font-mono text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all">
+                <button id="manualSearchBtn" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-emerald-600 hover:bg-emerald-500 text-white w-10 h-10 rounded-lg flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-search"></i>
+                </button>
+            </div>
+            <div id="manualSearchResult" class="w-full max-w-md mt-6 hidden">
+                <!-- Result populated via JS -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bg-gray-900 border-t border-gray-800 flex pb-safe">
+        <button id="navCamera" class="flex-1 py-4 flex flex-col items-center gap-1 text-emerald-500 transition-colors">
+            <i class="fa-solid fa-camera text-xl"></i>
+            <span class="text-xs font-medium">카메라 스캔</span>
+        </button>
+        <button id="navSearch" class="flex-1 py-4 flex flex-col items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors">
+            <i class="fa-solid fa-keyboard text-xl"></i>
+            <span class="text-xs font-medium">직접 입력</span>
+        </button>
+    </nav>
+
+    <!-- Database Management Modal -->
+    <div id="dbModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex flex-col items-center justify-end sm:justify-center p-4 pb-0 sm:pb-4 transition-opacity duration-300 opacity-0">
+        <div class="bg-gray-900 border border-gray-700 w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col max-h-[85vh] transform transition-transform duration-300 translate-y-full sm:translate-y-0" id="dbModalContent">
+            
+            <div class="p-5 border-b border-gray-800 flex justify-between items-center">
+                <h2 class="text-xl font-bold"><i class="fa-solid fa-database text-emerald-500 mr-2"></i> 내 차량 DB 관리</h2>
+                <button id="closeDbModal" class="text-gray-400 hover:text-white p-2"><i class="fa-solid fa-times text-xl"></i></button>
+            </div>
+            
+            <div class="p-5 overflow-y-auto flex-1">
+                <!-- Add Form -->
+                <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 mb-6">
+                    <h3 class="text-sm font-bold text-gray-300 mb-3">새 차량 등록</h3>
+                    <div class="flex flex-col gap-3">
+                        <input type="text" id="newPlateNum" placeholder="차량 번호 (띄어쓰기 없이)" class="bg-gray-900 border border-gray-700 rounded-lg p-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500">
+                        <input type="text" id="newOwnerName" placeholder="주인 이름" class="bg-gray-900 border border-gray-700 rounded-lg p-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500">
+                        <button id="addPlateBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-plus"></i> 등록하기
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CSV Import/Export -->
+                <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 mb-6">
+                    <h3 class="text-sm font-bold text-gray-300 mb-3">데이터 백업 및 복구 (CSV)</h3>
+                    <div class="flex gap-2">
+                        <input type="file" id="csvFileInput" accept=".csv" class="hidden">
+                        <button id="importCsvBtn" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded-lg transition-colors text-sm">
+                            <i class="fa-solid fa-file-import mr-1"></i> CSV 불러오기
+                        </button>
+                        <button id="exportCsvBtn" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded-lg transition-colors text-sm">
+                            <i class="fa-solid fa-file-export mr-1"></i> CSV 내보내기
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-2 text-center break-keep">데이터는 서버에 전송되지 않으며 기기 내부에만 저장됩니다.</p>
+                </div>
+
+                <!-- List -->
+                <div>
+                    <h3 class="text-sm font-bold text-gray-300 mb-3 flex justify-between items-center">
+                        등록된 차량 목록
+                        <span id="totalCarsCount" class="text-xs bg-gray-800 px-2 py-1 rounded text-gray-400">0대</span>
+                    </h3>
+                    <div id="dbList" class="space-y-2">
+                        <!-- Items populated via JS -->
+                        <div class="text-center text-gray-500 py-8">데이터를 불러오는 중...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Alert/Toast -->
+    <div id="toast" class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-gray-800 border border-gray-600 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-3 transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px]">
+        <i id="toastIcon" class="fa-solid fa-info-circle text-emerald-500"></i>
+        <span id="toastMsg" class="font-medium text-sm">메시지</span>
+    </div>
+
+    <script>
+        // --- System Constants & Local Data ---
+        const DB_KEY = 'plate_scanner_local_db';
+        let localDB = {};
+
+        // Load data from LocalStorage
+        function loadDbData() {
+            const data = localStorage.getItem(DB_KEY);
+            if (data) {
+                try {
+                    localDB = JSON.parse(data);
+                } catch (e) {
+                    localDB = {};
+                }
+            } else {
+                localDB = {};
+            }
+            renderDbList();
+        }
+
+        // Save data to LocalStorage
+        function saveDbData() {
+            localStorage.setItem(DB_KEY, JSON.stringify(localDB));
+            renderDbList();
+        }
+
+        // --- UI Elements ---
+        const videoElement = document.getElementById('videoElement');
+        const ocrLoading = document.getElementById('ocrLoading');
+        const scanLine = document.getElementById('scanLine');
+        const resultCard = document.getElementById('resultCard');
+        const resultPlateNum = document.getElementById('resultPlateNum');
+        const resultOwnerName = document.getElementById('resultOwnerName');
+        const closeResultBtn = document.getElementById('closeResultBtn');
+        
+        // Navigation
+        const navCamera = document.getElementById('navCamera');
+        const navSearch = document.getElementById('navSearch');
+        const cameraView = document.getElementById('cameraView');
+        const searchView = document.getElementById('searchView');
+        
+        // Modal & Admin
+        const dbManageBtn = document.getElementById('dbManageBtn');
+        const dbModal = document.getElementById('dbModal');
+        const dbModalContent = document.getElementById('dbModalContent');
+        const closeDbModal = document.getElementById('closeDbModal');
+        const dbList = document.getElementById('dbList');
+        const totalCarsCount = document.getElementById('totalCarsCount');
+        const manualPlateInput = document.getElementById('manualPlateInput');
+        const manualSearchResult = document.getElementById('manualSearchResult');
+        const csvFileInput = document.getElementById('csvFileInput');
+
+        let cameraStream = null;
+        let ocrWorker = null;
+        let isScanning = false;
+        let scanInterval = null;
+        let lastRecognizedPlate = "";
+
+        // --- App Initialization ---
+        async function initApp() {
+            loadDbData(); // 로컬 데이터 불러오기
+            startCamera();
+            await initOcrEngine();
+        }
+
+        // --- OCR Engine (Tesseract.js) ---
+        async function initOcrEngine() {
+            try {
+                ocrWorker = await Tesseract.createWorker('kor');
+                ocrLoading.style.display = 'none';
+                scanLine.style.display = 'block';
+                startScanningLoop();
+            } catch (error) {
+                console.error("OCR Init Error:", error);
+                ocrLoading.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-4xl text-red-500 mb-4"></i><p class="text-white">OCR 엔진을 불러오지 못했습니다.</p>`;
+            }
+        }
+
+        // --- Camera Handling ---
+        async function startCamera() {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                try {
+                    cameraStream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } 
+                    });
+                    videoElement.srcObject = cameraStream;
+                } catch (error) {
+                    console.error("Camera Error:", error);
+                    showToast("카메라 권한을 허용해주세요.", "error");
+                }
+            } else {
+                showToast("이 브라우저는 카메라를 지원하지 않습니다.", "error");
+            }
+        }
+
+        function stopCamera() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+            if (scanInterval) clearInterval(scanInterval);
+            isScanning = false;
+        }
+
+        // --- Scanning Logic ---
+        function startScanningLoop() {
+            if (isScanning || !ocrWorker) return;
+            isScanning = true;
+            
+            scanInterval = setInterval(async () => {
+                if (!isScanning) return;
+                await processFrame();
+            }, 1500);
+        }
+
+        async function processFrame() {
+            if (videoElement.readyState !== 4) return;
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            const cropWidth = 400;
+            const cropHeight = 150;
+            canvas.width = cropWidth;
+            canvas.height = cropHeight;
+
+            const sx = (videoElement.videoWidth - cropWidth) / 2;
+            const sy = (videoElement.videoHeight - cropHeight) / 2;
+
+            ctx.drawImage(videoElement, sx, sy, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+
+            try {
+                const { data: { text } } = await ocrWorker.recognize(canvas);
+                handleOcrResult(text);
+            } catch(e) {}
+        }
+
+        function handleOcrResult(text) {
+            const cleanedText = text.replace(/\s/g, '');
+            const regex = /\d{2,3}[가-힣]\d{4}/;
+            const match = cleanedText.match(regex);
+
+            if (match) {
+                const plate = match[0];
+                if (plate !== lastRecognizedPlate) {
+                    lastRecognizedPlate = plate;
+                    lookupPlate(plate);
+                }
+            }
+        }
+
+        // --- Database Lookup (Local Storage) ---
+        function lookupPlate(plateNum) {
+            isScanning = false;
+            if(scanInterval) clearInterval(scanInterval);
+            scanLine.style.display = 'none';
+
+            resultPlateNum.textContent = formatPlate(plateNum);
+            
+            const ownerName = localDB[plateNum];
+            
+            if (ownerName) {
+                resultOwnerName.textContent = ownerName;
+                resultOwnerName.className = "text-2xl font-bold text-white";
+                resultCard.querySelector('.bg-emerald-500\\/10').className = "mt-4 bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl";
+                showResultCard();
+                showToast("차량을 찾았습니다!", "success");
+            } else {
+                resultOwnerName.textContent = "미등록 차량";
+                resultOwnerName.className = "text-2xl font-bold text-gray-400";
+                resultCard.querySelector('.bg-emerald-500\\/10').className = "mt-4 bg-gray-800 border border-gray-700 p-4 rounded-xl";
+                showResultCard();
+            }
+        }
+
+        function formatPlate(plate) {
+            if(plate.length >= 7) {
+                return plate.slice(0, -4) + ' ' + plate.slice(-4);
+            }
+            return plate;
+        }
+
+        // --- UI Interactions ---
+        function showResultCard() {
+            resultCard.classList.remove('translate-y-full', 'opacity-0');
+            resultCard.classList.add('translate-y-0', 'opacity-100');
+        }
+
+        function hideResultCard() {
+            resultCard.classList.add('translate-y-full', 'opacity-0');
+            resultCard.classList.remove('translate-y-0', 'opacity-100');
+        }
+
+        function resumeScanning() {
+            hideResultCard();
+            lastRecognizedPlate = "";
+            scanLine.style.display = 'block';
+            startScanningLoop();
+        }
+
+        closeResultBtn.addEventListener('click', resumeScanning);
+
+        // Navigation Setup
+        navCamera.addEventListener('click', () => {
+            searchView.classList.add('hidden');
+            cameraView.classList.remove('hidden');
+            
+            navCamera.classList.remove('text-gray-500');
+            navCamera.classList.add('text-emerald-500');
+            navSearch.classList.remove('text-emerald-500');
+            navSearch.classList.add('text-gray-500');
+            
+            startCamera();
+            if(ocrWorker) {
+                scanLine.style.display = 'block';
+                startScanningLoop();
+            }
+        });
+
+        navSearch.addEventListener('click', () => {
+            cameraView.classList.add('hidden');
+            searchView.classList.remove('hidden');
+            
+            navSearch.classList.remove('text-gray-500');
+            navSearch.classList.add('text-emerald-500');
+            navCamera.classList.remove('text-emerald-500');
+            navCamera.classList.add('text-gray-500');
+            
+            stopCamera();
+        });
+
+        // Manual Search Logic
+        document.getElementById('manualSearchBtn').addEventListener('click', () => {
+            let input = manualPlateInput.value.replace(/\s/g, '');
+            if(!input) return;
+            
+            const ownerName = localDB[input];
+
+            manualSearchResult.classList.remove('hidden');
+            if (ownerName) {
+                manualSearchResult.innerHTML = `
+                    <div class="bg-emerald-500/10 border border-emerald-500/30 p-5 rounded-xl text-center">
+                        <div class="text-sm text-emerald-400 mb-1">차량 조회 완료</div>
+                        <div class="text-2xl font-mono font-bold text-white mb-3">${formatPlate(input)}</div>
+                        <div class="text-xl text-white">차주: <span class="font-bold">${ownerName}</span></div>
+                    </div>
+                `;
+            } else {
+                manualSearchResult.innerHTML = `
+                    <div class="bg-gray-800 border border-gray-700 p-5 rounded-xl text-center">
+                        <div class="text-xl font-mono font-bold text-gray-400 mb-2">${formatPlate(input)}</div>
+                        <div class="text-gray-500">등록되지 않은 차량입니다.</div>
+                    </div>
+                `;
+            }
+        });
+
+        // --- Database Management Panel ---
+        dbManageBtn.addEventListener('click', () => {
+            dbModal.classList.remove('hidden');
+            void dbModal.offsetWidth;
+            dbModal.classList.remove('opacity-0');
+            dbModal.classList.add('opacity-100');
+            dbModalContent.classList.remove('translate-y-full');
+        });
+
+        closeDbModal.addEventListener('click', () => {
+            dbModal.classList.remove('opacity-100');
+            dbModal.classList.add('opacity-0');
+            dbModalContent.classList.add('translate-y-full');
+            setTimeout(() => {
+                dbModal.classList.add('hidden');
+            }, 300);
+        });
+
+        // Add New Plate
+        document.getElementById('addPlateBtn').addEventListener('click', () => {
+            const plateInput = document.getElementById('newPlateNum');
+            const ownerInput = document.getElementById('newOwnerName');
+            
+            const plate = plateInput.value.replace(/\s/g, '');
+            const owner = ownerInput.value.trim();
+
+            if(!plate || !owner) {
+                showToast("차량 번호와 주인을 모두 입력하세요.", "error");
+                return;
+            }
+
+            localDB[plate] = owner;
+            saveDbData();
+            
+            showToast("차량이 등록되었습니다.", "success");
+            plateInput.value = '';
+            ownerInput.value = '';
+        });
+
+        // CSV Import
+        document.getElementById('importCsvBtn').addEventListener('click', () => csvFileInput.click());
+        csvFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const text = event.target.result;
+                const lines = text.split('\n');
+                let count = 0;
+                
+                for(let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if(!line) continue;
+                    const parts = line.split(',');
+                    if(parts.length >= 2) {
+                        const plate = parts[0].trim().replace(/\s/g, '');
+                        const owner = parts[1].trim();
+                        if(plate === '차량번호') continue; // 헤더 무시
+                        localDB[plate] = owner;
+                        count++;
+                    }
+                }
+                saveDbData();
+                showToast(`${count}대의 차량 데이터를 불러왔습니다.`, "success");
+                csvFileInput.value = '';
+            };
+            reader.readAsText(file);
+        });
+
+        // CSV Export
+        document.getElementById('exportCsvBtn').addEventListener('click', () => {
+            let csv = "차량번호,주인이름\n";
+            for (let plate in localDB) {
+                csv += `${plate},${localDB[plate]}\n`;
+            }
+            
+            // UTF-8 BOM 추가 (엑셀에서 한글 깨짐 방지)
+            const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `plate_scanner_db_${new Date().getTime()}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast("CSV 파일이 다운로드 되었습니다.", "success");
+        });
+
+        // Render DB List
+        function renderDbList() {
+            dbList.innerHTML = '';
+            const plates = Object.keys(localDB);
+            totalCarsCount.textContent = `${plates.length}대`;
+
+            if(plates.length === 0) {
+                dbList.innerHTML = '<div class="text-center text-gray-500 py-8">등록된 차량이 없습니다.</div>';
+                return;
+            }
+
+            plates.forEach((plateId) => {
+                const ownerName = localDB[plateId];
+                const item = document.createElement('div');
+                item.className = "flex justify-between items-center bg-gray-800 p-3 rounded-lg border border-gray-700";
+                item.innerHTML = `
+                    <div>
+                        <div class="font-mono font-bold text-emerald-400">${formatPlate(plateId)}</div>
+                        <div class="text-sm text-gray-300">${ownerName}</div>
+                    </div>
+                    <button class="text-red-400 hover:text-red-300 p-2 delete-btn" data-id="${plateId}">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                `;
+                dbList.appendChild(item);
+            });
+
+            // Attach delete listeners
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.currentTarget.getAttribute('data-id');
+                    if(confirm(`${formatPlate(id)} 차량을 삭제하시겠습니까?`)) {
+                        delete localDB[id];
+                        saveDbData();
+                        showToast("삭제되었습니다.", "success");
+                    }
+                });
+            });
+        }
+
+        // --- Helpers ---
+        let toastTimeout;
+        function showToast(msg, type = "info") {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toastIcon');
+            const text = document.getElementById('toastMsg');
+            
+            text.textContent = msg;
+            
+            if (type === "error") {
+                icon.className = "fa-solid fa-circle-exclamation text-red-500";
+                toast.className = "fixed top-20 left-1/2 transform -translate-x-1/2 bg-red-900/90 border border-red-700 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-3 transition-all duration-300 opacity-100 translate-y-0";
+            } else if (type === "success") {
+                icon.className = "fa-solid fa-check-circle text-emerald-500";
+                toast.className = "fixed top-20 left-1/2 transform -translate-x-1/2 bg-emerald-900/90 border border-emerald-700 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-3 transition-all duration-300 opacity-100 translate-y-0";
+            } else {
+                icon.className = "fa-solid fa-info-circle text-blue-400";
+                toast.className = "fixed top-20 left-1/2 transform -translate-x-1/2 bg-gray-800 border border-gray-600 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-3 transition-all duration-300 opacity-100 translate-y-0";
+            }
+
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-[-20px]');
+            }, 3000);
+        }
+
+        // Start App
+        window.addEventListener('load', initApp);
+
+    </script>
+</body>
+</html>
