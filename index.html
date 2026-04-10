@@ -229,7 +229,7 @@
     </nav>
 
     <!-- Database Management Modal -->
-    <div id="dbModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex flex-col items-center justify-end sm:justify-center p-4 pb-0 sm:pb-4 transition-opacity duration-300 opacity-0">
+    <div id="dbModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 hidden flex flex-col items-center justify-end sm:justify-center p-4 pb-0 sm:pb-4 transition-opacity duration-300 opacity-0">
         <div class="bg-gray-900 border border-gray-700 w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col max-h-[85vh] transform transition-transform duration-300 translate-y-full sm:translate-y-0" id="dbModalContent">
             
             <div class="p-4 border-b border-gray-800 flex justify-between items-center shrink-0">
@@ -280,8 +280,20 @@
         </div>
     </div>
 
+    <!-- Custom Confirm Modal -->
+    <div id="confirmModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] hidden flex flex-col items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+        <div class="bg-gray-900 border border-gray-700 w-full max-w-sm rounded-2xl p-5 transform transition-transform duration-300 scale-95" id="confirmModalContent">
+            <h3 class="text-lg font-bold text-white mb-2" id="confirmTitle">확인</h3>
+            <p class="text-gray-300 text-sm mb-6" id="confirmMessage">정말 진행하시겠습니까?</p>
+            <div class="flex gap-3">
+                <button id="confirmCancelBtn" class="flex-1 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-white text-sm font-medium transition-colors">취소</button>
+                <button id="confirmOkBtn" class="flex-1 py-2.5 bg-red-600 hover:bg-red-500 rounded-lg text-white text-sm font-medium transition-colors">확인</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Custom Alert/Toast -->
-    <div id="toast" class="fixed top-16 left-1/2 transform -translate-x-1/2 bg-gray-800 border border-gray-600 text-white px-5 py-2.5 rounded-full shadow-2xl z-50 flex items-center gap-2 transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px]">
+    <div id="toast" class="fixed top-16 left-1/2 transform -translate-x-1/2 bg-gray-800 border border-gray-600 text-white px-5 py-2.5 rounded-full shadow-2xl z-[70] flex items-center gap-2 transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px]">
         <i id="toastIcon" class="fa-solid fa-info-circle text-emerald-500 text-sm"></i>
         <span id="toastMsg" class="font-medium text-xs sm:text-sm whitespace-nowrap">메시지</span>
     </div>
@@ -753,6 +765,48 @@
             captureAndSave('manualSearchResultWrapper', 'manualSaveScreenBtn', 'db_search_result');
         });
 
+        // --- Custom Confirm Modal Helper ---
+        function showConfirm(title, message, onConfirm, onCancel) {
+            const modal = document.getElementById('confirmModal');
+            const content = document.getElementById('confirmModalContent');
+            document.getElementById('confirmTitle').textContent = title;
+            document.getElementById('confirmMessage').textContent = message;
+
+            modal.classList.remove('hidden');
+            void modal.offsetWidth; // trigger reflow
+            modal.classList.remove('opacity-0');
+            modal.classList.add('opacity-100');
+            content.classList.remove('scale-95');
+            content.classList.add('scale-100');
+
+            const okBtn = document.getElementById('confirmOkBtn');
+            const cancelBtn = document.getElementById('confirmCancelBtn');
+
+            // 이벤트 리스너 중복 방지를 위해 버튼 재생성 (clone)
+            const newOkBtn = okBtn.cloneNode(true);
+            okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+            const newCancelBtn = cancelBtn.cloneNode(true);
+            cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+
+            const closeConfirm = () => {
+                modal.classList.remove('opacity-100');
+                modal.classList.add('opacity-0');
+                content.classList.remove('scale-100');
+                content.classList.add('scale-95');
+                setTimeout(() => modal.classList.add('hidden'), 300);
+            };
+
+            newCancelBtn.addEventListener('click', () => {
+                closeConfirm();
+                if(onCancel) onCancel();
+            });
+            
+            newOkBtn.addEventListener('click', () => {
+                closeConfirm();
+                if(onConfirm) onConfirm();
+            });
+        }
+
         // --- Database Management Panel ---
         dbManageBtn.addEventListener('click', () => {
             dbModal.classList.remove('hidden');
@@ -793,34 +847,48 @@
         });
 
         // CSV Import
-        document.getElementById('importCsvBtn').addEventListener('click', () => csvFileInput.click());
+        document.getElementById('importCsvBtn').addEventListener('click', () => {
+            csvFileInput.click();
+        });
+        
         csvFileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                const text = event.target.result;
-                const lines = text.split('\n');
-                let count = 0;
-                
-                for(let i = 0; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if(!line) continue;
-                    const parts = line.split(',');
-                    if(parts.length >= 2) {
-                        const plate = parts[0].trim().replace(/\s/g, '');
-                        const owner = parts[1].trim();
-                        if(plate === '차량번호') continue; // 헤더 무시
-                        localDB[plate] = owner;
-                        count++;
-                    }
+            showConfirm(
+                "데이터 덮어쓰기", 
+                "기존에 등록된 차량 데이터가 모두 삭제되고 CSV 파일의 데이터로 완전히 교체됩니다. 계속하시겠습니까?", 
+                () => { // 확인 시
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        const text = event.target.result;
+                        const lines = text.split('\n');
+                        let count = 0;
+                        
+                        localDB = {}; // 기존에 로드되어 있던 DB 싹 지우기
+                        
+                        for(let i = 0; i < lines.length; i++) {
+                            const line = lines[i].trim();
+                            if(!line) continue;
+                            const parts = line.split(',');
+                            if(parts.length >= 2) {
+                                const plate = parts[0].trim().replace(/\s/g, '');
+                                const owner = parts[1].trim();
+                                if(plate === '차량번호') continue; // 헤더 무시
+                                localDB[plate] = owner;
+                                count++;
+                            }
+                        }
+                        saveDbData();
+                        showToast(`기존 데이터 삭제 후 ${count}대의 차량을 새로 불러왔습니다.`, "success");
+                        csvFileInput.value = '';
+                    };
+                    reader.readAsText(file);
+                },
+                () => { // 취소 시
+                    csvFileInput.value = '';
                 }
-                saveDbData();
-                showToast(`${count}대의 차량 데이터를 불러왔습니다.`, "success");
-                csvFileInput.value = '';
-            };
-            reader.readAsText(file);
+            );
         });
 
         // CSV Export
@@ -868,15 +936,19 @@
                 dbList.appendChild(item);
             });
 
-            // Attach delete listeners
+            // Attach delete listeners with Custom Confirm Modal
             document.querySelectorAll('.delete-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const id = e.currentTarget.getAttribute('data-id');
-                    if(confirm(`${formatPlate(id)} 차량을 삭제하시겠습니까?`)) {
-                        delete localDB[id];
-                        saveDbData();
-                        showToast("삭제되었습니다.", "success");
-                    }
+                    showConfirm(
+                        "차량 삭제", 
+                        `${formatPlate(id)} 차량을 정말 삭제하시겠습니까?`, 
+                        () => {
+                            delete localDB[id];
+                            saveDbData();
+                            showToast("삭제되었습니다.", "success");
+                        }
+                    );
                 });
             });
         }
@@ -892,13 +964,13 @@
             
             if (type === "error") {
                 icon.className = "fa-solid fa-circle-exclamation text-red-500 text-sm";
-                toast.className = "fixed top-16 left-1/2 transform -translate-x-1/2 bg-red-900/90 border border-red-700 text-white px-5 py-2.5 rounded-full shadow-2xl z-50 flex items-center gap-2 transition-all duration-300 opacity-100 translate-y-0";
+                toast.className = "fixed top-16 left-1/2 transform -translate-x-1/2 bg-red-900/90 border border-red-700 text-white px-5 py-2.5 rounded-full shadow-2xl z-[70] flex items-center gap-2 transition-all duration-300 opacity-100 translate-y-0";
             } else if (type === "success") {
                 icon.className = "fa-solid fa-check-circle text-emerald-500 text-sm";
-                toast.className = "fixed top-16 left-1/2 transform -translate-x-1/2 bg-emerald-900/90 border border-emerald-700 text-white px-5 py-2.5 rounded-full shadow-2xl z-50 flex items-center gap-2 transition-all duration-300 opacity-100 translate-y-0";
+                toast.className = "fixed top-16 left-1/2 transform -translate-x-1/2 bg-emerald-900/90 border border-emerald-700 text-white px-5 py-2.5 rounded-full shadow-2xl z-[70] flex items-center gap-2 transition-all duration-300 opacity-100 translate-y-0";
             } else {
                 icon.className = "fa-solid fa-info-circle text-blue-400 text-sm";
-                toast.className = "fixed top-16 left-1/2 transform -translate-x-1/2 bg-gray-800 border border-gray-600 text-white px-5 py-2.5 rounded-full shadow-2xl z-50 flex items-center gap-2 transition-all duration-300 opacity-100 translate-y-0";
+                toast.className = "fixed top-16 left-1/2 transform -translate-x-1/2 bg-gray-800 border border-gray-600 text-white px-5 py-2.5 rounded-full shadow-2xl z-[70] flex items-center gap-2 transition-all duration-300 opacity-100 translate-y-0";
             }
 
             clearTimeout(toastTimeout);
