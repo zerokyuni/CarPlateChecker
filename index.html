@@ -191,47 +191,27 @@
         </div>
 
         <!-- Manual Search View (Hidden by default) -->
-        <div id="searchView" class="hidden absolute inset-0 bg-gray-900 p-6 flex flex-col items-center justify-center z-20 overflow-y-auto">
-            <i class="fa-solid fa-keyboard text-5xl text-gray-700 mb-4 mt-6"></i>
-            <h2 class="text-xl font-bold mb-2">수동 검색</h2>
-            <p class="text-gray-400 text-sm text-center mb-6">카메라 인식이 어려울 때 직접 번호를 입력하세요.</p>
+        <div id="searchView" class="hidden absolute inset-0 bg-gray-900 p-6 flex flex-col items-center justify-start z-20 overflow-y-auto">
+            <i class="fa-solid fa-keyboard text-5xl text-gray-700 mb-4 mt-8"></i>
+            <h2 class="text-xl font-bold mb-2">DB 차량 검색</h2>
+            <p class="text-gray-400 text-sm text-center mb-6">등록된 차량 번호의 일부를 입력하세요.</p>
             
-            <div class="w-full max-w-md relative">
-                <input type="text" id="manualPlateInput" placeholder="예: 12가3456" class="w-full bg-gray-800 border border-gray-700 rounded-xl py-3 pl-4 pr-12 text-lg font-mono text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all">
+            <div class="w-full max-w-md relative shrink-0">
+                <input type="text" id="manualPlateInput" placeholder="예: 12가 (일부만 입력해도 검색됨)" class="w-full bg-gray-800 border border-gray-700 rounded-xl py-3 pl-4 pr-12 text-base sm:text-lg font-mono text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all">
                 <button id="manualSearchBtn" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-emerald-600 hover:bg-emerald-500 text-white w-9 h-9 rounded-lg flex items-center justify-center transition-colors">
                     <i class="fa-solid fa-search"></i>
                 </button>
             </div>
             
-            <!-- Manual Search Result -->
-            <div id="manualSearchResult" class="w-full max-w-md mt-4 hidden">
-                <div class="bg-gray-800 border border-gray-700 p-4 rounded-xl flex flex-col gap-2">
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <div class="text-[10px] text-gray-400 mb-0.5">차량 번호</div>
-                            <div id="manualResultPlateNum" class="text-base font-bold text-white font-mono truncate">-</div>
-                        </div>
-                        <div>
-                            <div class="text-[10px] text-gray-400 mb-0.5">차량 주인</div>
-                            <div id="manualResultOwnerName" class="text-base font-bold text-white truncate">-</div>
-                        </div>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-2 mt-1">
-                        <div id="manualBu5StatusBox" class="p-2 rounded-lg border border-gray-700 text-center">
-                            <div class="text-[10px] text-gray-400 mb-0.5">5부제</div>
-                            <div id="manualBu5Status" class="text-xs font-bold">-</div>
-                        </div>
-                        <div id="manualBu2StatusBox" class="p-2 rounded-lg border border-gray-700 text-center">
-                            <div class="text-[10px] text-gray-400 mb-0.5">2부제</div>
-                            <div id="manualBu2Status" class="text-xs font-bold">-</div>
-                        </div>
-                    </div>
-                    
-                    <button id="manualSaveScreenBtn" class="mt-3 w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white text-sm font-medium transition-colors">
-                        <i class="fa-solid fa-download mr-1"></i>이 결과 저장하기
-                    </button>
+            <!-- Manual Search Result (DB Search List) -->
+            <div id="manualSearchResultWrapper" class="w-full max-w-md mt-4 hidden flex-col gap-3 pb-20">
+                <div id="manualSearchResultList" class="flex flex-col gap-2 w-full">
+                    <!-- Results injected here via JS -->
                 </div>
+                
+                <button id="manualSaveScreenBtn" class="mt-2 w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white text-sm font-medium transition-colors hidden shrink-0 shadow-lg">
+                    <i class="fa-solid fa-download mr-1"></i>검색 결과 이미지로 저장
+                </button>
             </div>
         </div>
     </main>
@@ -639,44 +619,83 @@
         navSearch.addEventListener('click', () => {
             cameraView.classList.add('hidden');
             searchView.classList.remove('hidden');
+            searchView.classList.add('flex');
             
             navSearch.classList.remove('text-gray-500');
             navSearch.classList.add('text-emerald-500');
             navCamera.classList.remove('text-emerald-500');
             navCamera.classList.add('text-gray-500');
             
+            // 수동 검색 진입 시 입력창 초기화
+            document.getElementById('manualPlateInput').value = '';
+            document.getElementById('manualSearchResultWrapper').classList.add('hidden');
+            document.getElementById('manualSearchResultWrapper').classList.remove('flex');
+            
             stopCamera();
         });
 
-        // Manual Search Logic
-        document.getElementById('manualSearchBtn').addEventListener('click', () => {
+        // Manual Search Logic (DB Real-time Search)
+        function performManualSearch() {
             let input = manualPlateInput.value.replace(/\s/g, '');
-            if(!input) return;
+            const resultWrapper = document.getElementById('manualSearchResultWrapper');
+            const resultList = document.getElementById('manualSearchResultList');
+            const saveBtn = document.getElementById('manualSaveScreenBtn');
             
-            const ownerName = localDB[input];
-            
-            document.getElementById('manualResultPlateNum').textContent = formatPlate(input);
+            resultList.innerHTML = ''; // 기존 검색 결과 초기화
 
-            if (ownerName) {
-                document.getElementById('manualResultOwnerName').textContent = ownerName;
-                document.getElementById('manualResultOwnerName').className = "text-base font-bold text-emerald-400 truncate";
-            } else {
-                document.getElementById('manualResultOwnerName').textContent = "미등록";
-                document.getElementById('manualResultOwnerName').className = "text-base font-bold text-gray-500";
+            if(!input) {
+                resultWrapper.classList.add('hidden');
+                resultWrapper.classList.remove('flex');
+                return;
             }
 
-            // Check Restrictions for manual input
-            const restrictions = checkDrivingRestrictions(input);
-            updateRestrictionUI(
-                restrictions, 
-                document.getElementById('manualBu5StatusBox'), 
-                document.getElementById('manualBu5Status'), 
-                document.getElementById('manualBu2StatusBox'), 
-                document.getElementById('manualBu2Status')
-            );
+            // DB에서 검색어(일부 일치)로 필터링
+            const plates = Object.keys(localDB);
+            const matchedPlates = plates.filter(plate => plate.includes(input));
 
-            manualSearchResult.classList.remove('hidden');
-        });
+            resultWrapper.classList.remove('hidden');
+            resultWrapper.classList.add('flex');
+
+            if (matchedPlates.length === 0) {
+                resultList.innerHTML = `
+                    <div class="bg-gray-800 border border-gray-700 p-4 rounded-xl text-center text-gray-400 text-sm">
+                        DB에 일치하는 차량이 없습니다.
+                    </div>
+                `;
+                saveBtn.classList.add('hidden');
+                return;
+            }
+
+            saveBtn.classList.remove('hidden');
+
+            // 일치하는 차량 목록 생성
+            matchedPlates.forEach(plate => {
+                const ownerName = localDB[plate];
+                const restrictions = checkDrivingRestrictions(plate);
+                
+                // 5부제 / 2부제 간략 상태 HTML
+                const bu5Text = restrictions.bu5.canDrive ? '<span class="text-emerald-400 font-bold">가능</span>' : '<span class="text-red-400 font-bold">불가</span>';
+                const bu2Text = restrictions.bu2.canDrive ? '<span class="text-emerald-400 font-bold">가능</span>' : '<span class="text-red-400 font-bold">불가</span>';
+
+                const item = document.createElement('div');
+                item.className = "bg-gray-800 border border-gray-700 p-3 rounded-xl flex flex-col gap-2 shrink-0 shadow-sm";
+                item.innerHTML = `
+                    <div class="flex justify-between items-center border-b border-gray-700 pb-2">
+                        <div class="text-base font-bold text-white font-mono">${formatPlate(plate)}</div>
+                        <div class="text-sm font-bold text-emerald-400 truncate max-w-[50%]"><i class="fa-solid fa-user text-[10px] mr-1 opacity-70"></i>${ownerName}</div>
+                    </div>
+                    <div class="flex gap-2 text-[11px] sm:text-xs">
+                        <div class="flex-1 bg-gray-900 p-1.5 rounded text-center text-gray-300">5부제: ${bu5Text}</div>
+                        <div class="flex-1 bg-gray-900 p-1.5 rounded text-center text-gray-300">2부제: ${bu2Text}</div>
+                    </div>
+                `;
+                resultList.appendChild(item);
+            });
+        }
+
+        // 검색 버튼 클릭 및 타이핑 시 실시간 검색 이벤트 연결
+        document.getElementById('manualSearchBtn').addEventListener('click', performManualSearch);
+        document.getElementById('manualPlateInput').addEventListener('input', performManualSearch);
 
         // --- Screen Capture Logic (html2canvas) ---
         async function captureAndSave(elementId, buttonsToHide, filenamePrefix) {
@@ -729,9 +748,9 @@
             captureAndSave('resultData', 'actionButtons', 'scan_result');
         });
 
-        manualSaveScreenBtn.addEventListener('click', () => {
-            // 수동 검색 '결과창' 영역 캡처
-            captureAndSave('manualSearchResult', 'manualSaveScreenBtn', 'search_result');
+        document.getElementById('manualSaveScreenBtn').addEventListener('click', () => {
+            // 수동 검색 '목록창' 영역 전체 캡처
+            captureAndSave('manualSearchResultWrapper', 'manualSaveScreenBtn', 'db_search_result');
         });
 
         // --- Database Management Panel ---
