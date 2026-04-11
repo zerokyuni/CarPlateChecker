@@ -3,11 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>스마트 차량 번호판 스캐너</title>
+    <title>스마트 차량 번호판 스캐너 (LPR SYS)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- 100% 오픈소스 비전 및 OCR 라이브러리 -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://docs.opencv.org/4.8.0/opencv.js" async type="text/javascript"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
     <style>
         body { background-color: #111827; color: white; overscroll-behavior-y: none; }
         
@@ -16,6 +20,7 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
+            height: 100dvh;
         }
         .main-content {
             display: flex;
@@ -24,9 +29,9 @@
             overflow: hidden;
         }
         
-        /* Camera Section (Top Half) */
+        /* Camera Section */
         .camera-section {
-            flex: 1; /* Take up half the space */
+            flex: 1; 
             position: relative;
             background-color: #000;
             overflow: hidden;
@@ -39,28 +44,33 @@
             height: 100%;
             object-fit: cover;
         }
+
+        /* Fixed Guideline Box (Replaces Auto-Tracking) */
         .scan-guide {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 80%;
-            max-width: 350px;
-            height: 120px;
-            border: 2px solid rgba(255, 255, 255, 0.5);
-            border-radius: 12px;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+            width: 85%;
+            max-width: 360px;
+            height: 90px;
+            border: 2px solid rgba(16, 185, 129, 0.8);
+            border-radius: 8px;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
             z-index: 10;
         }
+        
         .scan-line {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 2px;
-            background-color: #10B981;
-            box-shadow: 0 0 10px #10B981;
-            animation: scan 2s infinite linear;
+            background-color: rgba(16, 185, 129, 0.8);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 1);
+            animation: scan 1.5s infinite linear;
+            z-index: 5;
+            pointer-events: none;
         }
         @keyframes scan {
             0% { top: 0; opacity: 0; }
@@ -69,18 +79,18 @@
             100% { top: 100%; opacity: 0; }
         }
 
-        /* Result Section (Bottom Half) */
+        /* Result Section */
         .result-section {
-            flex: 1; /* Take up half the space */
+            flex: 1; 
             background-color: #1f2937;
             border-top: 1px solid #374151;
-            padding: 0.75rem; /* Reduced padding for compact view */
+            padding: 0.4rem; 
             overflow-y: auto;
             display: flex;
             flex-direction: column;
         }
 
-        /* Custom Scrollbar */
+        .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 0.5rem); }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #4B5563; border-radius: 3px; }
@@ -91,7 +101,7 @@
     <!-- Header -->
     <header class="bg-gray-900 border-b border-gray-800 p-3 sm:p-4 flex justify-between items-center shadow-md z-30 shrink-0">
         <h1 class="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
-            <i class="fa-solid fa-car-side text-emerald-500"></i> 번호판 스캐너
+            <i class="fa-solid fa-bolt text-emerald-500"></i> 차량번호판 스캐너 by KYUN
         </h1>
         <button id="dbManageBtn" class="text-gray-400 hover:text-white transition-colors p-1.5 sm:p-2 bg-gray-800 rounded-lg text-sm sm:text-base">
             <i class="fa-solid fa-database"></i> DB 관리
@@ -100,89 +110,85 @@
 
     <!-- Main Content -->
     <main class="main-content relative" id="mainContent">
-        <!-- Camera View (Always visible in camera mode) -->
+        <!-- Camera View -->
         <div id="cameraView" class="flex flex-col h-full w-full">
             
-            <!-- Top Half: Camera -->
-            <div class="camera-section">
+            <div class="camera-section" id="cameraSection">
                 <video id="videoElement" autoplay playsinline muted></video>
+                
+                <!-- Fixed Guideline Box -->
                 <div class="scan-guide" id="scanGuide">
                     <div class="scan-line" id="scanLine" style="display: none;"></div>
-                    <div class="absolute -top-7 left-0 w-full text-center text-[11px] sm:text-sm text-gray-300 font-medium tracking-wide">
+                    <div class="absolute -top-7 left-0 w-full text-center text-[12px] sm:text-sm text-emerald-400 font-bold tracking-wide drop-shadow-md">
                         박스 안에 번호판을 맞춰주세요
                     </div>
                 </div>
-
-                <!-- OCR Loading Indicator -->
-                <div id="ocrLoading" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-50">
-                    <i class="fa-solid fa-circle-notch fa-spin text-3xl sm:text-4xl text-emerald-500 mb-3 sm:mb-4"></i>
-                    <p class="text-white font-medium text-sm sm:text-base">OCR 엔진을 불러오는 중입니다...</p>
-                    <p class="text-gray-400 text-xs sm:text-sm mt-2">초기 1회만 약 10~20초 소요됩니다.</p>
+                
+                <!-- Loading Indicator -->
+                <div id="ocrLoading" class="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-50">
+                    <i class="fa-solid fa-microchip fa-spin text-3xl sm:text-4xl text-emerald-500 mb-3 sm:mb-4"></i>
+                    <p class="text-white font-medium text-sm sm:text-base" id="loadingText">오픈소스 비전 엔진 로딩 중...</p>
+                    <p class="text-gray-400 text-xs sm:text-sm mt-2">서버 연결 없이 기기 내부에서만 동작합니다.</p>
                 </div>
             </div>
 
-            <!-- Bottom Half: Fixed Result Status (Compact Version) -->
+            <!-- Bottom Half: Fixed Result Status -->
             <div class="result-section relative">
-                <div class="flex justify-between items-center mb-2 shrink-0">
-                    <h2 class="text-base font-bold text-white flex items-center gap-2">
-                        <i class="fa-solid fa-clipboard-list text-emerald-400"></i> 인식 상태
+                <div class="flex justify-between items-center mb-1 shrink-0">
+                    <h2 class="text-[15px] sm:text-base font-bold text-white flex items-center gap-1.5">
+                        <i class="fa-solid fa-clipboard-list text-emerald-400"></i> 스캔 결과
                     </h2>
-                    <span id="scanStatusIndicator" class="text-[10px] sm:text-xs px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> 스캔중
+                    <span id="scanStatusIndicator" class="text-[9px] sm:text-[10px] px-1.5 py-0.5 bg-gray-500/20 text-gray-400 rounded-full flex items-center gap-1">
+                        <i class="fa-solid fa-hourglass-half"></i> 대기중
                     </span>
                 </div>
 
-                <!-- Placeholder when nothing is scanned -->
                 <div id="idleState" class="flex-1 flex flex-col items-center justify-center text-gray-500 h-full">
-                    <i class="fa-solid fa-camera text-3xl mb-2 opacity-50"></i>
-                    <p class="text-sm">카메라로 번호판을 비춰주세요</p>
+                    <i class="fa-solid fa-camera text-3xl mb-1 opacity-50"></i>
+                    <p class="text-sm mt-1 text-center">중앙 박스에 번호판이 들어오면<br>자동으로 인식됩니다</p>
+                    <p class="text-[10px] text-gray-600 mt-0.5">(기울어진 번호판 자동 수평 정렬 적용)</p>
                 </div>
 
                 <!-- Result Data Container -->
-                <div id="resultData" class="hidden flex-col gap-2 h-full justify-start pb-1">
+                <div id="resultData" class="hidden flex-col gap-1.5 h-full justify-start pb-1">
                     
-                    <!-- Captured Plate Image -->
-                    <div id="capturedPlateImgContainer" class="w-full h-16 sm:h-20 bg-black rounded-lg border border-gray-700 overflow-hidden relative shrink-0">
-                        <img id="capturedPlateImg" src="" class="w-full h-full object-cover" alt="인식된 번호판 사진">
-                        <div class="absolute top-1 left-1 bg-black/60 text-[9px] text-gray-300 px-1.5 py-0.5 rounded">캡처 이미지</div>
+                    <div id="capturedPlateImgContainer" class="w-full h-11 sm:h-14 bg-white rounded-md border border-gray-700 overflow-hidden relative shrink-0 flex items-center justify-center p-0.5">
+                        <img id="capturedPlateImg" src="" class="max-w-full max-h-full object-contain" alt="인식된 번호판 사진">
+                        <div class="absolute top-0.5 left-0.5 bg-black/60 text-[8px] text-emerald-400 px-1 py-0.5 rounded font-bold border border-emerald-500/50" id="engineUsedBadge">AI 전처리 자료</div>
                     </div>
 
-                    <!-- Plate & Owner -->
-                    <div class="grid grid-cols-2 gap-2 shrink-0">
-                        <div class="bg-gray-800 p-2 rounded-lg border border-gray-700">
-                            <div class="text-[10px] text-gray-400 mb-0.5">차량 번호</div>
-                            <div id="resultPlateNum" class="text-base font-bold text-white font-mono truncate">-</div>
+                    <div class="grid grid-cols-2 gap-1.5 shrink-0">
+                        <div class="bg-gray-800 px-2 py-1.5 rounded-md border border-gray-700">
+                            <div class="text-[9px] text-gray-400 mb-0.5">차량 번호</div>
+                            <div id="resultPlateNum" class="text-sm sm:text-base font-bold text-white font-mono truncate">-</div>
                         </div>
-                        <div class="bg-gray-800 p-2 rounded-lg border border-gray-700">
-                            <div class="text-[10px] text-gray-400 mb-0.5">차량 주인</div>
-                            <div id="resultOwnerName" class="text-base font-bold text-white truncate">-</div>
+                        <div class="bg-gray-800 px-2 py-1.5 rounded-md border border-gray-700">
+                            <div class="text-[9px] text-gray-400 mb-0.5">차량 주인 (DB)</div>
+                            <div id="resultOwnerName" class="text-sm sm:text-base font-bold text-white truncate">-</div>
                         </div>
                     </div>
                     
-                    <!-- DateTime -->
-                    <div class="bg-gray-800 p-2 rounded-lg border border-gray-700 shrink-0">
-                        <div class="text-[10px] text-gray-400 mb-0.5">인식 일시</div>
-                        <div id="resultDateTime" class="text-xs font-medium text-gray-300">-</div>
+                    <div class="bg-gray-800 px-2 py-1.5 rounded-md border border-gray-700 shrink-0">
+                        <div class="text-[9px] text-gray-400 mb-0.5">인식 일시</div>
+                        <div id="resultDateTime" class="text-[10px] sm:text-xs font-medium text-gray-300">-</div>
                     </div>
 
-                    <!-- Restrictions -->
-                    <div class="grid grid-cols-2 gap-2 shrink-0">
-                        <div id="bu5StatusBox" class="p-2 rounded-lg border border-gray-700 text-center flex flex-col justify-center">
-                            <div class="text-[10px] text-gray-400 mb-0.5">5부제</div>
-                            <div id="bu5Status" class="text-xs font-bold">-</div>
+                    <div class="grid grid-cols-2 gap-1.5 shrink-0">
+                        <div id="bu5StatusBox" class="px-2 py-1.5 rounded-md border border-gray-700 text-center flex flex-col justify-center">
+                            <div class="text-[9px] text-gray-400 mb-0.5">5부제</div>
+                            <div id="bu5Status" class="text-[10px] sm:text-xs font-bold">-</div>
                         </div>
-                        <div id="bu2StatusBox" class="p-2 rounded-lg border border-gray-700 text-center flex flex-col justify-center">
-                            <div class="text-[10px] text-gray-400 mb-0.5">2부제</div>
-                            <div id="bu2Status" class="text-xs font-bold">-</div>
+                        <div id="bu2StatusBox" class="px-2 py-1.5 rounded-md border border-gray-700 text-center flex flex-col justify-center">
+                            <div class="text-[9px] text-gray-400 mb-0.5">2부제</div>
+                            <div id="bu2Status" class="text-[10px] sm:text-xs font-bold">-</div>
                         </div>
                     </div>
                     
-                    <!-- Buttons -->
-                    <div class="flex gap-2 mt-auto pt-1 w-full hidden shrink-0" id="actionButtons">
-                        <button id="resumeScanBtn" class="flex-1 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white text-sm font-medium transition-colors">
-                            <i class="fa-solid fa-rotate-right mr-1"></i>다시 스캔
+                    <div class="flex gap-1.5 mt-auto pt-1 w-full hidden shrink-0" id="actionButtons">
+                        <button id="toggleScanBtn" class="flex-1 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-md text-white text-xs sm:text-sm font-medium transition-colors">
+                            <i class="fa-solid fa-pause mr-1"></i>화면 정지
                         </button>
-                        <button id="saveScreenBtn" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white text-sm font-medium transition-colors">
+                        <button id="saveScreenBtn" class="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-md text-white text-xs sm:text-sm font-medium transition-colors">
                             <i class="fa-solid fa-download mr-1"></i>결과 저장
                         </button>
                     </div>
@@ -190,7 +196,7 @@
             </div>
         </div>
 
-        <!-- Manual Search View (Hidden by default) -->
+        <!-- Manual Search View -->
         <div id="searchView" class="hidden absolute inset-0 bg-gray-900 p-6 flex flex-col items-center justify-start z-20 overflow-y-auto">
             <i class="fa-solid fa-keyboard text-5xl text-gray-700 mb-4 mt-8"></i>
             <h2 class="text-xl font-bold mb-2">DB 차량 검색</h2>
@@ -203,12 +209,8 @@
                 </button>
             </div>
             
-            <!-- Manual Search Result (DB Search List) -->
-            <div id="manualSearchResultWrapper" class="w-full max-w-md mt-4 hidden flex-col gap-3 pb-20">
-                <div id="manualSearchResultList" class="flex flex-col gap-2 w-full">
-                    <!-- Results injected here via JS -->
-                </div>
-                
+            <div id="manualSearchResultWrapper" class="w-full max-w-md mt-4 hidden flex-col gap-3 pb-24">
+                <div id="manualSearchResultList" class="flex flex-col gap-2 w-full"></div>
                 <button id="manualSaveScreenBtn" class="mt-2 w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white text-sm font-medium transition-colors hidden shrink-0 shadow-lg">
                     <i class="fa-solid fa-download mr-1"></i>검색 결과 이미지로 저장
                 </button>
@@ -218,27 +220,25 @@
 
     <!-- Bottom Navigation -->
     <nav class="bg-gray-900 border-t border-gray-800 flex shrink-0 pb-safe z-30">
-        <button id="navCamera" class="flex-1 py-2 sm:py-3 flex flex-col items-center gap-1 text-emerald-500 transition-colors">
-            <i class="fa-solid fa-camera text-lg sm:text-xl"></i>
-            <span class="text-[10px] sm:text-xs font-medium">카메라 스캔</span>
+        <button id="navCamera" class="flex-1 py-2 flex flex-col items-center gap-0.5 text-emerald-500 transition-colors">
+            <i class="fa-solid fa-camera text-base sm:text-lg"></i>
+            <span class="text-[9px] sm:text-[10px] font-medium">카메라 스캔</span>
         </button>
-        <button id="navSearch" class="flex-1 py-2 sm:py-3 flex flex-col items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors">
-            <i class="fa-solid fa-keyboard text-lg sm:text-xl"></i>
-            <span class="text-[10px] sm:text-xs font-medium">직접 입력</span>
+        <button id="navSearch" class="flex-1 py-2 flex flex-col items-center gap-0.5 text-gray-500 hover:text-gray-300 transition-colors">
+            <i class="fa-solid fa-keyboard text-base sm:text-lg"></i>
+            <span class="text-[9px] sm:text-[10px] font-medium">직접 입력</span>
         </button>
     </nav>
 
     <!-- Database Management Modal -->
     <div id="dbModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 hidden flex flex-col items-center justify-end sm:justify-center p-4 pb-0 sm:pb-4 transition-opacity duration-300 opacity-0">
         <div class="bg-gray-900 border border-gray-700 w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col max-h-[85vh] transform transition-transform duration-300 translate-y-full sm:translate-y-0" id="dbModalContent">
-            
             <div class="p-4 border-b border-gray-800 flex justify-between items-center shrink-0">
                 <h2 class="text-lg font-bold"><i class="fa-solid fa-database text-emerald-500 mr-2"></i> 내 차량 DB 관리</h2>
                 <button id="closeDbModal" class="text-gray-400 hover:text-white p-2"><i class="fa-solid fa-times text-lg"></i></button>
             </div>
             
             <div class="p-4 overflow-y-auto flex-1">
-                <!-- Add Form -->
                 <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 mb-5">
                     <h3 class="text-sm font-bold text-gray-300 mb-3">새 차량 등록</h3>
                     <div class="flex flex-col gap-3">
@@ -250,7 +250,6 @@
                     </div>
                 </div>
 
-                <!-- CSV Import/Export -->
                 <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 mb-5">
                     <h3 class="text-sm font-bold text-gray-300 mb-3">데이터 백업 및 복구 (CSV)</h3>
                     <div class="flex gap-2">
@@ -262,17 +261,14 @@
                             <i class="fa-solid fa-file-export mr-1"></i> CSV 내보내기
                         </button>
                     </div>
-                    <p class="text-[10px] text-gray-400 mt-2 text-center break-keep">데이터는 서버에 전송되지 않으며 기기 내부에만 저장됩니다.</p>
                 </div>
 
-                <!-- List -->
                 <div>
                     <h3 class="text-sm font-bold text-gray-300 mb-3 flex justify-between items-center">
                         등록된 차량 목록
                         <span id="totalCarsCount" class="text-[10px] bg-gray-800 px-2 py-1 rounded text-gray-400">0대</span>
                     </h3>
                     <div id="dbList" class="space-y-2">
-                        <!-- Items populated via JS -->
                         <div class="text-center text-sm text-gray-500 py-6">데이터를 불러오는 중...</div>
                     </div>
                 </div>
@@ -292,7 +288,7 @@
         </div>
     </div>
 
-    <!-- Custom Alert/Toast -->
+    <!-- Toast -->
     <div id="toast" class="fixed top-16 left-1/2 transform -translate-x-1/2 bg-gray-800 border border-gray-600 text-white px-5 py-2.5 rounded-full shadow-2xl z-[70] flex items-center gap-2 transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px]">
         <i id="toastIcon" class="fa-solid fa-info-circle text-emerald-500 text-sm"></i>
         <span id="toastMsg" class="font-medium text-xs sm:text-sm whitespace-nowrap">메시지</span>
@@ -303,22 +299,11 @@
         const DB_KEY = 'plate_scanner_local_db';
         let localDB = {};
 
-        // Load data from LocalStorage
         function loadDbData() {
             const data = localStorage.getItem(DB_KEY);
-            if (data) {
-                try {
-                    localDB = JSON.parse(data);
-                } catch (e) {
-                    localDB = {};
-                }
-            } else {
-                localDB = {};
-            }
+            if (data) { try { localDB = JSON.parse(data); } catch (e) { localDB = {}; } }
             renderDbList();
         }
-
-        // Save data to LocalStorage
         function saveDbData() {
             localStorage.setItem(DB_KEY, JSON.stringify(localDB));
             renderDbList();
@@ -326,10 +311,12 @@
 
         // --- UI Elements ---
         const videoElement = document.getElementById('videoElement');
-        const ocrLoading = document.getElementById('ocrLoading');
+        const cameraSection = document.getElementById('cameraSection');
+        const scanGuide = document.getElementById('scanGuide');
         const scanLine = document.getElementById('scanLine');
+        const ocrLoading = document.getElementById('ocrLoading');
+        const loadingText = document.getElementById('loadingText');
         
-        // Split Screen Result Elements
         const idleState = document.getElementById('idleState');
         const resultData = document.getElementById('resultData');
         const resultPlateNum = document.getElementById('resultPlateNum');
@@ -340,56 +327,55 @@
         const bu2StatusBox = document.getElementById('bu2StatusBox');
         const bu2Status = document.getElementById('bu2Status');
         const actionButtons = document.getElementById('actionButtons');
-        const resumeScanBtn = document.getElementById('resumeScanBtn');
+        const toggleScanBtn = document.getElementById('toggleScanBtn');
         const saveScreenBtn = document.getElementById('saveScreenBtn');
         const scanStatusIndicator = document.getElementById('scanStatusIndicator');
         const capturedPlateImg = document.getElementById('capturedPlateImg');
-        const capturedPlateImgContainer = document.getElementById('capturedPlateImgContainer');
+        const engineUsedBadge = document.getElementById('engineUsedBadge');
         
-        // Navigation
         const navCamera = document.getElementById('navCamera');
         const navSearch = document.getElementById('navSearch');
         const cameraView = document.getElementById('cameraView');
         const searchView = document.getElementById('searchView');
-        
-        // Modal & Admin
-        const dbManageBtn = document.getElementById('dbManageBtn');
-        const dbModal = document.getElementById('dbModal');
-        const dbModalContent = document.getElementById('dbModalContent');
-        const closeDbModal = document.getElementById('closeDbModal');
-        const dbList = document.getElementById('dbList');
-        const totalCarsCount = document.getElementById('totalCarsCount');
-        const manualPlateInput = document.getElementById('manualPlateInput');
-        const manualSearchResult = document.getElementById('manualSearchResult');
-        const manualSaveScreenBtn = document.getElementById('manualSaveScreenBtn');
-        const csvFileInput = document.getElementById('csvFileInput');
 
         let cameraStream = null;
         let ocrWorker = null;
-        let isScanning = false;
-        let scanInterval = null;
-        let lastRecognizedPlate = "";
-        let currentFrameDataUrl = ""; // 실시간 캡처 이미지 데이터 보관
+        let isScanning = false; 
+        let isCvReady = false;
+        let ocrLoopId = null;
+        let isProcessingOcr = false;
 
         // --- App Initialization ---
         async function initApp() {
-            loadDbData(); // 로컬 데이터 불러오기
+            loadDbData();
             startCamera();
-            await initOcrEngine();
+            checkEngines();
         }
 
-        // --- OCR Engine (Tesseract.js) ---
-        async function initOcrEngine() {
-            try {
-                ocrWorker = await Tesseract.createWorker('kor');
-                ocrLoading.style.display = 'none';
-                scanLine.style.display = 'block';
-                startScanningLoop();
-            } catch (error) {
-                console.error("OCR Init Error:", error);
-                ocrLoading.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-3xl sm:text-4xl text-red-500 mb-3 sm:mb-4"></i><p class="text-white text-sm">OCR 엔진을 불러오지 못했습니다.</p>`;
-                scanStatusIndicator.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500"></i> 오류`;
-            }
+        function checkEngines() {
+            let checkInterval = setInterval(async () => {
+                if (typeof cv !== 'undefined' && cv.Mat && !isCvReady) {
+                    isCvReady = true;
+                    loadingText.textContent = "OCR 텍스트 인식 엔진 로딩 중...";
+                }
+                
+                if (isCvReady && !ocrWorker) {
+                    clearInterval(checkInterval);
+                    try {
+                        ocrWorker = await Tesseract.createWorker('kor');
+                        await ocrWorker.setParameters({
+                            tessedit_char_whitelist: '0123456789가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허고노도로모보소오조초코토포호구누두루무부수우주추쿠투푸후배바사아자하허호ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+                            tessedit_pageseg_mode: '7' // 단일 라인 문자열 
+                        });
+                        
+                        ocrLoading.style.display = 'none';
+                        isScanning = true;
+                        startEngines();
+                    } catch(e) {
+                        loadingText.textContent = "엔진 로딩 실패. 새로고침 해주세요.";
+                    }
+                }
+            }, 500);
         }
 
         // --- Camera Handling ---
@@ -397,102 +383,233 @@
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 try {
                     cameraStream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } 
+                        video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } 
                     });
                     videoElement.srcObject = cameraStream;
+                    videoElement.play();
                 } catch (error) {
-                    console.error("Camera Error:", error);
                     showToast("카메라 권한을 허용해주세요.", "error");
                 }
-            } else {
-                showToast("이 브라우저는 카메라를 지원하지 않습니다.", "error");
             }
         }
 
-        function stopCamera() {
-            if (cameraStream) {
-                cameraStream.getTracks().forEach(track => track.stop());
-                cameraStream = null;
-            }
-            if (scanInterval) clearInterval(scanInterval);
-            isScanning = false;
-        }
-
-        // --- Scanning Logic ---
-        function startScanningLoop() {
-            if (isScanning || !ocrWorker) return;
-            isScanning = true;
-            
-            scanStatusIndicator.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> 스캔중`;
+        function startEngines() {
+            scanStatusIndicator.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> OCR 딥스캔 중`;
             scanStatusIndicator.className = "text-[10px] sm:text-xs px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center gap-1";
-            
-            scanInterval = setInterval(async () => {
-                if (!isScanning) return;
-                await processFrame();
-            }, 1500);
+            scanLine.style.display = 'block';
+
+            // 1초 주기로 중앙 영역 정밀 스캔
+            ocrLoopId = setInterval(runOcrOnCenterBox, 1000);
         }
 
-        async function processFrame() {
-            if (videoElement.readyState !== 4) return;
+        function stopEngines() {
+            if (ocrLoopId) clearInterval(ocrLoopId);
+        }
 
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
+        // OpenCV: 자른 이미지 내부의 텍스트 덩어리를 찾아 수평 각도 계산
+        function getDeskewAngle(canvasElement) {
+            let src = cv.imread(canvasElement);
+            let gray = new cv.Mat();
+            let blur = new cv.Mat();
+            let sobel = new cv.Mat();
+            let thresh = new cv.Mat();
+            let morph = new cv.Mat();
+            // 글자들을 하나로 묶기 위한 가로로 넓은 커널 (번호판 특화)
+            let kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(30, 5));
+            let contours = new cv.MatVector();
+            let hierarchy = new cv.Mat();
             
-            // 번호판 가이드 박스 영역과 일치하게 자르기 위한 크기
-            const cropWidth = 400;
-            const cropHeight = 150;
-            canvas.width = cropWidth;
-            canvas.height = cropHeight;
-
-            const sx = (videoElement.videoWidth - cropWidth) / 2;
-            const sy = (videoElement.videoHeight - cropHeight) / 2;
-
-            // 카메라 영상 중앙 자르기
-            ctx.drawImage(videoElement, sx, sy, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
-            
-            // 현재 프레임을 이미지 데이터로 임시 저장 (인식 성공 시 화면에 띄우기 위함)
-            currentFrameDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            let calculatedAngle = 0;
 
             try {
-                const { data: { text } } = await ocrWorker.recognize(canvas);
-                handleOcrResult(text);
-            } catch(e) {}
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+                cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
+                // 수직선(글자 형태) 강조
+                cv.Sobel(blur, sobel, cv.CV_8U, 1, 0, 3, 1, 0, cv.BORDER_DEFAULT);
+                cv.threshold(sobel, thresh, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU);
+                cv.morphologyEx(thresh, morph, cv.MORPH_CLOSE, kernel);
+                cv.findContours(morph, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+                let maxArea = 0;
+                let bestCnt = null;
+
+                for (let i = 0; i < contours.size(); ++i) {
+                    let cnt = contours.get(i);
+                    let rect = cv.boundingRect(cnt);
+                    let area = rect.width * rect.height;
+                    let ratio = rect.width / rect.height;
+                    
+                    // 번호판 형태(직사각형) 필터링
+                    if (ratio > 1.5 && ratio < 8.0 && area > maxArea) {
+                        maxArea = area;
+                        bestCnt = cnt;
+                    }
+                }
+
+                if (bestCnt) {
+                    let minRect = cv.minAreaRect(bestCnt);
+                    calculatedAngle = minRect.angle;
+                    if (minRect.size.width < minRect.size.height) {
+                        calculatedAngle = calculatedAngle + 90;
+                    }
+                    // -45도 ~ 45도로 정규화
+                    if (calculatedAngle > 45) calculatedAngle -= 180;
+                    if (calculatedAngle < -45) calculatedAngle += 180;
+                    
+                    // 각도가 너무 극단적이면 오작동(범퍼 선 등)으로 간주하고 무시
+                    if (calculatedAngle > 25 || calculatedAngle < -25) calculatedAngle = 0;
+                }
+            } catch (e) {
+                console.error("Deskew Angle Calculation Error:", e);
+            } finally {
+                src.delete(); gray.delete(); blur.delete(); sobel.delete();
+                thresh.delete(); morph.delete(); kernel.delete();
+                contours.delete(); hierarchy.delete();
+            }
+            return calculatedAngle;
         }
 
-        function handleOcrResult(text) {
-            const cleanedText = text.replace(/\s/g, '');
-            const regex = /\d{2,3}[가-힣]\d{4}/;
-            const match = cleanedText.match(regex);
+        // 중앙 가이드 박스 크롭 -> 각도 검출 -> 회전 보정 -> 트리플 엔진 OCR 파이프라인
+        async function runOcrOnCenterBox() {
+            if (!isScanning || isProcessingOcr || videoElement.readyState !== 4) return;
+            isProcessingOcr = true;
 
-            if (match) {
-                const plate = match[0];
-                if (plate !== lastRecognizedPlate) {
-                    lastRecognizedPlate = plate;
-                    lookupPlate(plate);
-                }
+            // 1. 가이드라인 영역 비디오 픽셀 좌표 계산
+            const vRect = videoElement.getBoundingClientRect();
+            const gRect = scanGuide.getBoundingClientRect();
+
+            const boxX = gRect.left - vRect.left;
+            const boxY = gRect.top - vRect.top;
+            const boxW = gRect.width;
+            const boxH = gRect.height;
+
+            const vw_src = videoElement.videoWidth;
+            const vh_src = videoElement.videoHeight;
+            const scale = Math.max(vRect.width / vw_src, vRect.height / vh_src);
+
+            const offsetX = (vw_src * scale - vRect.width) / 2;
+            const offsetY = (vh_src * scale - vRect.height) / 2;
+
+            const srcX = (boxX + offsetX) / scale;
+            const srcY = (boxY + offsetY) / scale;
+            const srcW = boxW / scale;
+            const srcH = boxH / scale;
+
+            // 2. 가이드라인 위치 원본 크롭 (회전 전)
+            const rawCropCanvas = document.createElement('canvas');
+            rawCropCanvas.width = srcW;
+            rawCropCanvas.height = srcH;
+            const rawCtx = rawCropCanvas.getContext('2d');
+            rawCtx.drawImage(videoElement, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+
+            // 3. OpenCV 텍스트 덩어리 분석하여 기울기(각도) 찾아내기
+            const skewAngle = getDeskewAngle(rawCropCanvas);
+
+            // 4. 수평 보정(Deskew) 및 1.2배 리사이즈 (하드웨어 가속 Canvas Transform 사용)
+            const finalCropCanvas = document.createElement('canvas');
+            const scaledW = srcW * 1.2;
+            const scaledH = srcH * 1.2;
+            finalCropCanvas.width = scaledW;
+            finalCropCanvas.height = scaledH;
+            const finalCtx = finalCropCanvas.getContext('2d');
+            
+            // 품질 향상 (Cubic 보간 역할)
+            finalCtx.imageSmoothingEnabled = true;
+            finalCtx.imageSmoothingQuality = 'high';
+
+            // 이미지 중앙을 축으로 회전 보정
+            finalCtx.translate(scaledW / 2, scaledH / 2);
+            finalCtx.rotate(skewAngle * Math.PI / 180);
+            finalCtx.translate(-scaledW / 2, -scaledH / 2);
+            finalCtx.drawImage(rawCropCanvas, 0, 0, srcW, srcH, 0, 0, scaledW, scaledH);
+
+            // 5. OCR 전처리 시작 (트리플 엔진)
+            let plateSrc = cv.imread(finalCropCanvas);
+            cv.cvtColor(plateSrc, plateSrc, cv.COLOR_RGBA2GRAY, 0);
+
+            const tryOCR = async (mat, engineName) => {
+                const ocrCanvas = document.createElement('canvas');
+                cv.imshow(ocrCanvas, mat);
+                const { data: { text } } = await ocrWorker.recognize(ocrCanvas);
+                
+                let cleanedText = text.replace(/[^가-힣0-9A-Z]/g, '');
+                cleanedText = cleanedText.replace(/O/g, '0').replace(/I/g, '1').replace(/Z/g, '2').replace(/B/g, '8').replace(/S/g, '5');
+                const match = cleanedText.match(/\d{2,3}[가-힣]\d{4}/);
+                
+                if(match) return { plateNum: match[0], engineName, imgData: ocrCanvas.toDataURL('image/jpeg', 0.9) };
+                return null;
+            };
+
+            let ocrResult = null;
+
+            // 엔진 1: Standard Otsu 
+            let thresh1 = new cv.Mat();
+            cv.threshold(plateSrc, thresh1, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU);
+            cv.copyMakeBorder(thresh1, thresh1, 20, 20, 20, 20, cv.BORDER_CONSTANT, new cv.Scalar(255, 255, 255, 255));
+            ocrResult = await tryOCR(thresh1, `엔진1: 표준 (수평보정 ${skewAngle.toFixed(1)}도)`);
+            thresh1.delete();
+
+            // 엔진 2: Adaptive Thresholding 
+            if (!ocrResult) {
+                let thresh2 = new cv.Mat();
+                cv.adaptiveThreshold(plateSrc, thresh2, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 21, 10);
+                cv.bitwise_not(thresh2, thresh2); 
+                cv.copyMakeBorder(thresh2, thresh2, 20, 20, 20, 20, cv.BORDER_CONSTANT, new cv.Scalar(255, 255, 255, 255));
+                ocrResult = await tryOCR(thresh2, `엔진2: 야간 그림자 (수평보정 ${skewAngle.toFixed(1)}도)`);
+                thresh2.delete();
             }
+
+            // 엔진 3: High Contrast + Otsu
+            if (!ocrResult) {
+                let thresh3 = new cv.Mat();
+                plateSrc.convertTo(thresh3, -1, 1.5, -50);
+                cv.threshold(thresh3, thresh3, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU);
+                cv.copyMakeBorder(thresh3, thresh3, 20, 20, 20, 20, cv.BORDER_CONSTANT, new cv.Scalar(255, 255, 255, 255));
+                ocrResult = await tryOCR(thresh3, `엔진3: 강한 빛반사 (수평보정 ${skewAngle.toFixed(1)}도)`);
+                thresh3.delete();
+            }
+
+            plateSrc.delete();
+
+            // 성공적으로 인식한 경우 UI 업데이트
+            if (ocrResult) {
+                const ownerName = localDB[ocrResult.plateNum];
+                
+                engineUsedBadge.textContent = ocrResult.engineName;
+                scanGuide.style.borderColor = '#10B981'; // 초록색 테두리로 성공 표시
+
+                updateResultPanel({
+                    plateNum: ocrResult.plateNum,
+                    ownerName,
+                    image: ocrResult.imgData // 성공한 전처리 흑백 화면 표시 (기울기 보정된 모습 확인 가능)
+                });
+
+                // 성공 가이드 박스 색상 유지
+                setTimeout(() => {
+                    if(scanGuide) scanGuide.style.borderColor = 'rgba(16, 185, 129, 0.8)';
+                }, 1500);
+            }
+            
+            isProcessingOcr = false;
         }
 
         // --- Driving Restriction Logic ---
         function checkDrivingRestrictions(plateNum) {
-            // Extract the last digit of the license plate
             const lastDigit = parseInt(plateNum.slice(-1), 10);
-            
             const now = new Date();
-            const dayOfWeek = now.getDay(); // 0: Sun, 1: Mon, ..., 6: Sat
-            const date = now.getDate(); // 1~31
+            const dayOfWeek = now.getDay(); 
+            const date = now.getDate(); 
 
             let bu5Result = { canDrive: true, reason: "" };
             let bu2Result = { canDrive: true, reason: "" };
 
-            // 5부제 로직 (월~금만 적용)
             if (dayOfWeek >= 1 && dayOfWeek <= 5) {
                 let forbiddenDigits = [];
-                if (dayOfWeek === 1) forbiddenDigits = [1, 6]; // 월
-                else if (dayOfWeek === 2) forbiddenDigits = [2, 7]; // 화
-                else if (dayOfWeek === 3) forbiddenDigits = [3, 8]; // 수
-                else if (dayOfWeek === 4) forbiddenDigits = [4, 9]; // 목
-                else if (dayOfWeek === 5) forbiddenDigits = [5, 0]; // 금
+                if (dayOfWeek === 1) forbiddenDigits = [1, 6]; 
+                else if (dayOfWeek === 2) forbiddenDigits = [2, 7]; 
+                else if (dayOfWeek === 3) forbiddenDigits = [3, 8]; 
+                else if (dayOfWeek === 4) forbiddenDigits = [4, 9]; 
+                else if (dayOfWeek === 5) forbiddenDigits = [5, 0]; 
 
                 if (forbiddenDigits.includes(lastDigit)) {
                     bu5Result.canDrive = false;
@@ -506,114 +623,95 @@
                 bu5Result.reason = "주말 제외";
             }
 
-            // 2부제 로직
             const isOddDate = date % 2 !== 0;
             const isOddLastDigit = lastDigit % 2 !== 0;
 
             if (isOddDate && !isOddLastDigit) {
-                // 홀수날짜에는 끝자리 짝수 운행불가
                 bu2Result.canDrive = false;
                 bu2Result.reason = "운행불가";
             } else if (!isOddDate && isOddLastDigit) {
-                // 짝수날짜에는 끝자리 홀수 운행불가
                 bu2Result.canDrive = false;
                 bu2Result.reason = "운행불가";
             } else {
                 bu2Result.canDrive = true;
                 bu2Result.reason = "운행가능";
             }
-
             return { bu5: bu5Result, bu2: bu2Result };
         }
 
         function updateRestrictionUI(restrictions, bu5Box, bu5Text, bu2Box, bu2Text) {
-            // 5부제 UI 업데이트
             if (restrictions.bu5.canDrive) {
-                bu5Box.className = "p-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-center flex flex-col justify-center";
+                bu5Box.className = "px-2 py-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-center flex flex-col justify-center";
                 bu5Text.textContent = restrictions.bu5.reason;
-                bu5Text.className = "text-xs font-bold text-emerald-400";
+                bu5Text.className = "text-[10px] sm:text-xs font-bold text-emerald-400";
             } else {
-                bu5Box.className = "p-2 rounded-lg border border-red-500/30 bg-red-500/10 text-center flex flex-col justify-center";
+                bu5Box.className = "px-2 py-1.5 rounded-md border border-red-500/30 bg-red-500/10 text-center flex flex-col justify-center";
                 bu5Text.textContent = restrictions.bu5.reason;
-                bu5Text.className = "text-xs font-bold text-red-400";
+                bu5Text.className = "text-[10px] sm:text-xs font-bold text-red-400";
             }
-
-            // 2부제 UI 업데이트
             if (restrictions.bu2.canDrive) {
-                bu2Box.className = "p-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-center flex flex-col justify-center";
+                bu2Box.className = "px-2 py-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-center flex flex-col justify-center";
                 bu2Text.textContent = restrictions.bu2.reason;
-                bu2Text.className = "text-xs font-bold text-emerald-400";
+                bu2Text.className = "text-[10px] sm:text-xs font-bold text-emerald-400";
             } else {
-                bu2Box.className = "p-2 rounded-lg border border-red-500/30 bg-red-500/10 text-center flex flex-col justify-center";
+                bu2Box.className = "px-2 py-1.5 rounded-md border border-red-500/30 bg-red-500/10 text-center flex flex-col justify-center";
                 bu2Text.textContent = restrictions.bu2.reason;
-                bu2Text.className = "text-xs font-bold text-red-400";
+                bu2Text.className = "text-[10px] sm:text-xs font-bold text-red-400";
             }
         }
 
-        // --- Database Lookup & UI Update ---
-        function lookupPlate(plateNum) {
-            isScanning = false;
-            if(scanInterval) clearInterval(scanInterval);
-            scanLine.style.display = 'none';
-            scanStatusIndicator.innerHTML = `<i class="fa-solid fa-pause"></i> 일시정지`;
-            scanStatusIndicator.className = "text-[10px] sm:text-xs px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded-full flex items-center gap-1";
-
-            // Update UI elements
+        // --- Bottom Panel UI Update ---
+        function updateResultPanel(plateInfo) {
             idleState.classList.add('hidden');
             resultData.classList.remove('hidden');
             resultData.classList.add('flex');
             actionButtons.classList.remove('hidden');
 
-            // 캡처된 차량 이미지 표시
-            if(currentFrameDataUrl) {
-                capturedPlateImg.src = currentFrameDataUrl;
-            }
-
-            resultPlateNum.textContent = formatPlate(plateNum);
+            capturedPlateImg.src = plateInfo.image;
+            resultPlateNum.textContent = formatPlate(plateInfo.plateNum);
             
-            // Set Date/Time
             const now = new Date();
             const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
             resultDateTime.textContent = dateStr;
 
-            // Check Driving Restrictions
-            const restrictions = checkDrivingRestrictions(plateNum);
+            const restrictions = checkDrivingRestrictions(plateInfo.plateNum);
             updateRestrictionUI(restrictions, bu5StatusBox, bu5Status, bu2StatusBox, bu2Status);
             
-            const ownerName = localDB[plateNum];
-            
-            if (ownerName) {
-                resultOwnerName.textContent = ownerName;
-                resultOwnerName.className = "text-base font-bold text-emerald-400 truncate";
-                showToast("차량을 찾았습니다!", "success");
+            if (plateInfo.ownerName) {
+                resultOwnerName.textContent = plateInfo.ownerName;
+                resultOwnerName.className = "text-sm sm:text-base font-bold text-emerald-400 truncate";
             } else {
                 resultOwnerName.textContent = "미등록";
-                resultOwnerName.className = "text-base font-bold text-gray-500";
+                resultOwnerName.className = "text-sm sm:text-base font-bold text-gray-500";
             }
         }
 
         function formatPlate(plate) {
-            if(plate.length >= 7) {
-                return plate.slice(0, -4) + ' ' + plate.slice(-4);
-            }
+            if(plate.length >= 7) { return plate.slice(0, -4) + ' ' + plate.slice(-4); }
             return plate;
         }
 
         // --- UI Interactions ---
-        resumeScanBtn.addEventListener('click', () => {
-            idleState.classList.remove('hidden');
-            resultData.classList.add('hidden');
-            resultData.classList.remove('flex');
-            actionButtons.classList.add('hidden');
-            
-            lastRecognizedPlate = "";
-            scanLine.style.display = 'block';
-            startScanningLoop();
+        toggleScanBtn.addEventListener('click', () => {
+            isScanning = !isScanning;
+            if(isScanning) {
+                videoElement.play();
+                toggleScanBtn.innerHTML = `<i class="fa-solid fa-pause mr-1"></i>화면 정지`;
+                scanStatusIndicator.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> OCR 딥스캔 중`;
+                scanStatusIndicator.className = "text-[10px] sm:text-xs px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center gap-1";
+                scanLine.style.display = 'block';
+            } else {
+                videoElement.pause();
+                toggleScanBtn.innerHTML = `<i class="fa-solid fa-play mr-1"></i>다시 스캔`;
+                scanStatusIndicator.innerHTML = `<i class="fa-solid fa-pause"></i> 화면 정지됨`;
+                scanStatusIndicator.className = "text-[10px] sm:text-xs px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded-full flex items-center gap-1";
+                scanLine.style.display = 'none';
+            }
         });
 
-        // Navigation Setup
         navCamera.addEventListener('click', () => {
             searchView.classList.add('hidden');
+            searchView.classList.remove('flex');
             cameraView.classList.remove('hidden');
             
             navCamera.classList.remove('text-gray-500');
@@ -622,10 +720,9 @@
             navSearch.classList.add('text-gray-500');
             
             startCamera();
-            if(ocrWorker) {
-                scanLine.style.display = 'block';
-                startScanningLoop();
-            }
+            isScanning = true;
+            toggleScanBtn.innerHTML = `<i class="fa-solid fa-pause mr-1"></i>화면 정지`;
+            scanLine.style.display = 'block';
         });
 
         navSearch.addEventListener('click', () => {
@@ -638,30 +735,28 @@
             navCamera.classList.remove('text-emerald-500');
             navCamera.classList.add('text-gray-500');
             
-            // 수동 검색 진입 시 입력창 초기화
             document.getElementById('manualPlateInput').value = '';
             document.getElementById('manualSearchResultWrapper').classList.add('hidden');
             document.getElementById('manualSearchResultWrapper').classList.remove('flex');
             
+            isScanning = false;
             stopCamera();
+            scanLine.style.display = 'none';
         });
 
-        // Manual Search Logic (DB Real-time Search)
         function performManualSearch() {
-            let input = manualPlateInput.value.replace(/\s/g, '');
+            let input = document.getElementById('manualPlateInput').value.replace(/\s/g, '');
             const resultWrapper = document.getElementById('manualSearchResultWrapper');
             const resultList = document.getElementById('manualSearchResultList');
             const saveBtn = document.getElementById('manualSaveScreenBtn');
             
-            resultList.innerHTML = ''; // 기존 검색 결과 초기화
-
+            resultList.innerHTML = ''; 
             if(!input) {
                 resultWrapper.classList.add('hidden');
                 resultWrapper.classList.remove('flex');
                 return;
             }
 
-            // DB에서 검색어(일부 일치)로 필터링
             const plates = Object.keys(localDB);
             const matchedPlates = plates.filter(plate => plate.includes(input));
 
@@ -669,23 +764,17 @@
             resultWrapper.classList.add('flex');
 
             if (matchedPlates.length === 0) {
-                resultList.innerHTML = `
-                    <div class="bg-gray-800 border border-gray-700 p-4 rounded-xl text-center text-gray-400 text-sm">
-                        DB에 일치하는 차량이 없습니다.
-                    </div>
-                `;
+                resultList.innerHTML = `<div class="bg-gray-800 border border-gray-700 p-4 rounded-xl text-center text-gray-400 text-sm">DB에 일치하는 차량이 없습니다.</div>`;
                 saveBtn.classList.add('hidden');
                 return;
             }
 
             saveBtn.classList.remove('hidden');
 
-            // 일치하는 차량 목록 생성
             matchedPlates.forEach(plate => {
                 const ownerName = localDB[plate];
                 const restrictions = checkDrivingRestrictions(plate);
                 
-                // 5부제 / 2부제 간략 상태 HTML
                 const bu5Text = restrictions.bu5.canDrive ? '<span class="text-emerald-400 font-bold">가능</span>' : '<span class="text-red-400 font-bold">불가</span>';
                 const bu2Text = restrictions.bu2.canDrive ? '<span class="text-emerald-400 font-bold">가능</span>' : '<span class="text-red-400 font-bold">불가</span>';
 
@@ -705,11 +794,10 @@
             });
         }
 
-        // 검색 버튼 클릭 및 타이핑 시 실시간 검색 이벤트 연결
         document.getElementById('manualSearchBtn').addEventListener('click', performManualSearch);
         document.getElementById('manualPlateInput').addEventListener('input', performManualSearch);
 
-        // --- Screen Capture Logic (html2canvas) ---
+        // --- Screen Capture Logic ---
         async function captureAndSave(elementId, buttonsToHide, filenamePrefix) {
             const targetElement = document.getElementById(elementId);
             const btnContainer = document.getElementById(buttonsToHide);
@@ -717,55 +805,35 @@
 
             try {
                 showToast("화면을 캡처하는 중...", "info");
-                
-                // 캡처 시 화면 저장 버튼들이 보이지 않도록 잠시 숨김
                 if(btnContainer) btnContainer.style.display = 'none';
                 
-                // 캡처되는 이미지의 여백과 배경색을 예쁘게 다듬기 위한 임시 스타일
                 const originalPadding = targetElement.style.padding;
-                targetElement.style.padding = '16px'; // 모바일에 맞춘 캡처 여백
+                targetElement.style.padding = '16px'; 
                 targetElement.style.backgroundColor = '#1f2937';
                 targetElement.style.borderRadius = '12px';
 
-                // html2canvas 실행
-                const canvas = await html2canvas(targetElement, {
-                    backgroundColor: '#1f2937',
-                    scale: 2, // 고해상도 화질 유지
-                    logging: false,
-                    useCORS: true
-                });
+                const canvas = await html2canvas(targetElement, { backgroundColor: '#1f2937', scale: 2, logging: false, useCORS: true });
 
-                // 임시 스타일 복구
                 if(btnContainer) btnContainer.style.display = '';
                 targetElement.style.padding = originalPadding;
                 targetElement.style.backgroundColor = '';
                 targetElement.style.borderRadius = '';
 
-                // 다운로드 트리거
                 const link = document.createElement('a');
                 link.download = `${filenamePrefix}_${new Date().getTime()}.png`;
                 link.href = canvas.toDataURL('image/png');
                 link.click();
-                
                 showToast("화면이 성공적으로 저장되었습니다.", "success");
             } catch (error) {
                 if(btnContainer) btnContainer.style.display = ''; 
-                console.error("Capture Error:", error);
                 showToast("화면 저장에 실패했습니다.", "error");
             }
         }
 
-        saveScreenBtn.addEventListener('click', () => {
-            // 카메라 스캔 '인식 상태' 영역 캡처
-            captureAndSave('resultData', 'actionButtons', 'scan_result');
-        });
+        document.getElementById('saveScreenBtn').addEventListener('click', () => captureAndSave('resultData', 'actionButtons', 'scan_result'));
+        document.getElementById('manualSaveScreenBtn').addEventListener('click', () => captureAndSave('manualSearchResultWrapper', 'manualSaveScreenBtn', 'db_search_result'));
 
-        document.getElementById('manualSaveScreenBtn').addEventListener('click', () => {
-            // 수동 검색 '목록창' 영역 전체 캡처
-            captureAndSave('manualSearchResultWrapper', 'manualSaveScreenBtn', 'db_search_result');
-        });
-
-        // --- Custom Confirm Modal Helper ---
+        // --- Modals & DB Logic ---
         function showConfirm(title, message, onConfirm, onCancel) {
             const modal = document.getElementById('confirmModal');
             const content = document.getElementById('confirmModalContent');
@@ -773,7 +841,7 @@
             document.getElementById('confirmMessage').textContent = message;
 
             modal.classList.remove('hidden');
-            void modal.offsetWidth; // trigger reflow
+            void modal.offsetWidth; 
             modal.classList.remove('opacity-0');
             modal.classList.add('opacity-100');
             content.classList.remove('scale-95');
@@ -782,7 +850,6 @@
             const okBtn = document.getElementById('confirmOkBtn');
             const cancelBtn = document.getElementById('confirmCancelBtn');
 
-            // 이벤트 리스너 중복 방지를 위해 버튼 재생성 (clone)
             const newOkBtn = okBtn.cloneNode(true);
             okBtn.parentNode.replaceChild(newOkBtn, okBtn);
             const newCancelBtn = cancelBtn.cloneNode(true);
@@ -796,19 +863,14 @@
                 setTimeout(() => modal.classList.add('hidden'), 300);
             };
 
-            newCancelBtn.addEventListener('click', () => {
-                closeConfirm();
-                if(onCancel) onCancel();
-            });
-            
-            newOkBtn.addEventListener('click', () => {
-                closeConfirm();
-                if(onConfirm) onConfirm();
-            });
+            newCancelBtn.addEventListener('click', () => { closeConfirm(); if(onCancel) onCancel(); });
+            newOkBtn.addEventListener('click', () => { closeConfirm(); if(onConfirm) onConfirm(); });
         }
 
-        // --- Database Management Panel ---
-        dbManageBtn.addEventListener('click', () => {
+        const dbModal = document.getElementById('dbModal');
+        const dbModalContent = document.getElementById('dbModalContent');
+        
+        document.getElementById('dbManageBtn').addEventListener('click', () => {
             dbModal.classList.remove('hidden');
             void dbModal.offsetWidth;
             dbModal.classList.remove('opacity-0');
@@ -816,89 +878,59 @@
             dbModalContent.classList.remove('translate-y-full');
         });
 
-        closeDbModal.addEventListener('click', () => {
+        document.getElementById('closeDbModal').addEventListener('click', () => {
             dbModal.classList.remove('opacity-100');
             dbModal.classList.add('opacity-0');
             dbModalContent.classList.add('translate-y-full');
-            setTimeout(() => {
-                dbModal.classList.add('hidden');
-            }, 300);
+            setTimeout(() => { dbModal.classList.add('hidden'); }, 300);
         });
 
-        // Add New Plate
         document.getElementById('addPlateBtn').addEventListener('click', () => {
             const plateInput = document.getElementById('newPlateNum');
             const ownerInput = document.getElementById('newOwnerName');
-            
             const plate = plateInput.value.replace(/\s/g, '');
             const owner = ownerInput.value.trim();
 
-            if(!plate || !owner) {
-                showToast("차량 번호와 주인을 모두 입력하세요.", "error");
-                return;
-            }
-
+            if(!plate || !owner) { showToast("차량 번호와 주인을 모두 입력하세요.", "error"); return; }
             localDB[plate] = owner;
             saveDbData();
-            
             showToast("차량이 등록되었습니다.", "success");
-            plateInput.value = '';
-            ownerInput.value = '';
+            plateInput.value = ''; ownerInput.value = '';
         });
 
-        // CSV Import
-        document.getElementById('importCsvBtn').addEventListener('click', () => {
-            csvFileInput.click();
-        });
-        
+        const csvFileInput = document.getElementById('csvFileInput');
+        document.getElementById('importCsvBtn').addEventListener('click', () => csvFileInput.click());
         csvFileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
-            showConfirm(
-                "데이터 덮어쓰기", 
-                "기존에 등록된 차량 데이터가 모두 삭제되고 CSV 파일의 데이터로 완전히 교체됩니다. 계속하시겠습니까?", 
-                () => { // 확인 시
-                    const reader = new FileReader();
-                    reader.onload = function(event) {
-                        const text = event.target.result;
-                        const lines = text.split('\n');
-                        let count = 0;
-                        
-                        localDB = {}; // 기존에 로드되어 있던 DB 싹 지우기
-                        
-                        for(let i = 0; i < lines.length; i++) {
-                            const line = lines[i].trim();
-                            if(!line) continue;
-                            const parts = line.split(',');
-                            if(parts.length >= 2) {
-                                const plate = parts[0].trim().replace(/\s/g, '');
-                                const owner = parts[1].trim();
-                                if(plate === '차량번호') continue; // 헤더 무시
-                                localDB[plate] = owner;
-                                count++;
-                            }
+            showConfirm("데이터 덮어쓰기", "기존 데이터가 모두 삭제되고 교체됩니다. 계속하시겠습니까?", () => { 
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const lines = event.target.result.split('\n');
+                    localDB = {}; 
+                    for(let i = 0; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if(!line) continue;
+                        const parts = line.split(',');
+                        if(parts.length >= 2) {
+                            const plate = parts[0].trim().replace(/\s/g, '');
+                            const owner = parts[1].trim();
+                            if(plate === '차량번호' || !plate) continue; 
+                            localDB[plate] = owner;
                         }
-                        saveDbData();
-                        showToast(`기존 데이터 삭제 후 ${count}대의 차량을 새로 불러왔습니다.`, "success");
-                        csvFileInput.value = '';
-                    };
-                    reader.readAsText(file);
-                },
-                () => { // 취소 시
+                    }
+                    saveDbData(); 
+                    showToast(`기존 데이터 삭제 후 ${Object.keys(localDB).length}대의 차량을 새로 불러왔습니다.`, "success");
                     csvFileInput.value = '';
-                }
-            );
+                };
+                reader.readAsText(file);
+            }, () => { csvFileInput.value = ''; });
         });
 
-        // CSV Export
         document.getElementById('exportCsvBtn').addEventListener('click', () => {
             let csv = "차량번호,주인이름\n";
-            for (let plate in localDB) {
-                csv += `${plate},${localDB[plate]}\n`;
-            }
-            
-            // UTF-8 BOM 추가 (엑셀에서 한글 깨짐 방지)
+            for (let plate in localDB) csv += `${plate},${localDB[plate]}\n`;
             const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -909,11 +941,11 @@
             showToast("CSV 파일이 다운로드 되었습니다.", "success");
         });
 
-        // Render DB List
         function renderDbList() {
+            const dbList = document.getElementById('dbList');
             dbList.innerHTML = '';
             const plates = Object.keys(localDB);
-            totalCarsCount.textContent = `${plates.length}대`;
+            document.getElementById('totalCarsCount').textContent = `${plates.length}대`;
 
             if(plates.length === 0) {
                 dbList.innerHTML = '<div class="text-center text-sm text-gray-500 py-6">등록된 차량이 없습니다.</div>';
@@ -921,56 +953,45 @@
             }
 
             plates.forEach((plateId) => {
-                const ownerName = localDB[plateId];
                 const item = document.createElement('div');
                 item.className = "flex justify-between items-center bg-gray-800 p-3 rounded-lg border border-gray-700";
                 item.innerHTML = `
                     <div>
                         <div class="font-mono text-sm font-bold text-emerald-400">${formatPlate(plateId)}</div>
-                        <div class="text-[11px] sm:text-xs text-gray-300">${ownerName}</div>
+                        <div class="text-[11px] sm:text-xs text-gray-300">${localDB[plateId]}</div>
                     </div>
-                    <button class="text-red-400 hover:text-red-300 p-2 delete-btn" data-id="${plateId}">
-                        <i class="fa-solid fa-trash-can text-sm"></i>
-                    </button>
+                    <button class="text-red-400 hover:text-red-300 p-2 delete-btn" data-id="${plateId}"><i class="fa-solid fa-trash-can text-sm"></i></button>
                 `;
                 dbList.appendChild(item);
             });
 
-            // Attach delete listeners with Custom Confirm Modal
             document.querySelectorAll('.delete-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const id = e.currentTarget.getAttribute('data-id');
-                    showConfirm(
-                        "차량 삭제", 
-                        `${formatPlate(id)} 차량을 정말 삭제하시겠습니까?`, 
-                        () => {
-                            delete localDB[id];
-                            saveDbData();
-                            showToast("삭제되었습니다.", "success");
-                        }
-                    );
+                    showConfirm("차량 삭제", `${formatPlate(id)} 차량을 정말 삭제하시겠습니까?`, () => {
+                        delete localDB[id]; saveDbData(); showToast("삭제되었습니다.", "success");
+                    });
                 });
             });
         }
 
-        // --- Helpers ---
+        // --- Toast Helpers ---
         let toastTimeout;
         function showToast(msg, type = "info") {
             const toast = document.getElementById('toast');
             const icon = document.getElementById('toastIcon');
-            const text = document.getElementById('toastMsg');
+            document.getElementById('toastMsg').textContent = msg;
             
-            text.textContent = msg;
-            
+            const baseClass = "fixed top-16 left-1/2 transform -translate-x-1/2 text-white px-5 py-2.5 rounded-full shadow-2xl z-[70] flex items-center gap-2 transition-all duration-300 ";
             if (type === "error") {
                 icon.className = "fa-solid fa-circle-exclamation text-red-500 text-sm";
-                toast.className = "fixed top-16 left-1/2 transform -translate-x-1/2 bg-red-900/90 border border-red-700 text-white px-5 py-2.5 rounded-full shadow-2xl z-[70] flex items-center gap-2 transition-all duration-300 opacity-100 translate-y-0";
+                toast.className = baseClass + "bg-red-900/90 border border-red-700 opacity-100 translate-y-0";
             } else if (type === "success") {
                 icon.className = "fa-solid fa-check-circle text-emerald-500 text-sm";
-                toast.className = "fixed top-16 left-1/2 transform -translate-x-1/2 bg-emerald-900/90 border border-emerald-700 text-white px-5 py-2.5 rounded-full shadow-2xl z-[70] flex items-center gap-2 transition-all duration-300 opacity-100 translate-y-0";
+                toast.className = baseClass + "bg-emerald-900/90 border border-emerald-700 opacity-100 translate-y-0";
             } else {
                 icon.className = "fa-solid fa-info-circle text-blue-400 text-sm";
-                toast.className = "fixed top-16 left-1/2 transform -translate-x-1/2 bg-gray-800 border border-gray-600 text-white px-5 py-2.5 rounded-full shadow-2xl z-[70] flex items-center gap-2 transition-all duration-300 opacity-100 translate-y-0";
+                toast.className = baseClass + "bg-gray-800 border border-gray-600 opacity-100 translate-y-0";
             }
 
             clearTimeout(toastTimeout);
